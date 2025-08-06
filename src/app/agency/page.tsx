@@ -1,11 +1,13 @@
 "use client";
 
 import { PageHeader } from "@/components/agency-page-header";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input"; // Still used in the header
+import { Input } from "@/components/ui/input";
 import { useTableRows } from "@/hooks/use-table-rows";
-import { PlusCircle } from "lucide-react";
-import React, { useRef, useEffect } from "react";
+import React, { useState } from "react";
+import { saveAgencyVisitAction } from "@/actions/save-agency-visit.action";
+import { toast } from "sonner";
+import { ApprovalButton } from "@/components/approval-button";
+import { TableForm } from "@/components/table-form";
 import { cn } from "@/lib/utils";
 
 // Interface for the table row data
@@ -26,58 +28,172 @@ export interface AgencyTableRow {
 }
 
 // Factory function for creating a new row
-const createNewAgencyRow = (id: number): AgencyTableRow => ({
-  id,
-  srNo: String(id),
-  dateOfVisit: "",
-  employeeId: "",
-  employeeName: "",
-  mobileNo: "",
-  branchLocation: "",
-  product: "",
-  bucketDpd: "",
-  timeIn: "",
-  timeOut: "",
-  signature: "",
-  purposeOfVisit: "",
-});
-
-// Auto-Sizing Textarea Component
-const AutoSizingTextarea = (
-  props: React.TextareaHTMLAttributes<HTMLTextAreaElement>
-) => {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (textareaRef.current) {
-      // Temporarily shrink to get the correct scrollHeight
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-    }
-  }, [props.value]); // Rerun this effect when the value changes
-
-  return (
-    <textarea
-      ref={textareaRef}
-      {...props}
-      rows={1} // Start with a single row
-      className={cn(
-        "flex w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none overflow-hidden",
-        props.className
-      )}
-    />
-  );
+const createNewAgencyRow = (id: number): AgencyTableRow => {
+  const now = new Date();
+  return {
+    id,
+    srNo: String(id),
+    dateOfVisit: now.toLocaleDateString(),
+    employeeId: "",
+    employeeName: "",
+    mobileNo: "",
+    branchLocation: "",
+    product: "",
+    bucketDpd: "",
+    timeIn: now.toLocaleTimeString(),
+    timeOut: "",
+    signature: "",
+    purposeOfVisit: "",
+  };
 };
 
 export default function AgencyPage() {
+  const { rows, addRow, handleInputChange, updateRowValue } = useTableRows(
+    1, // Table now starts with only one row
+    createNewAgencyRow
+  );
+  const [isPending, setIsPending] = useState(false);
+
+  const handleApprovalSuccess = (rowId: number) => {
+    const now = new Date();
+    updateRowValue(rowId, "timeOut", now.toLocaleTimeString());
+    updateRowValue(rowId, "signature", "Approved by Bank Manager");
+  };
+
+  const validateRows = (isSubmitting: boolean) => {
+    for (const row of rows) {
+      const fieldsToValidate: (keyof Omit<AgencyTableRow, "id">)[] = [
+        "employeeId", "employeeName", "mobileNo", "branchLocation", 
+        "product", "bucketDpd", "purposeOfVisit"
+      ];
+
+      for (const field of fieldsToValidate) {
+        if (!row[field] || row[field].trim() === '') {
+          toast.error(`Please fill out all fields in row ${row.srNo}.`);
+          return false;
+        }
+      }
+      
+      if (isSubmitting && !row.signature) {
+        toast.error(`Row ${row.srNo} must be approved before submitting.`);
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const handleSaveOrSubmit = async (status: "DRAFT" | "SUBMITTED") => {
+    const isSubmitting = status === "SUBMITTED";
+    if (!validateRows(isSubmitting)) {
+      return;
+    }
+
+    setIsPending(true);
+    // FIX: Correctly destructure to exclude 'id' and resolve ESLint warning.
+    const rowsToSave = rows.map(({ id, ...rest }) => rest);
+    
+    const result = await saveAgencyVisitAction(rowsToSave, status);
+
+    if (result.error) {
+      toast.error(result.error);
+    } else {
+      toast.success(
+        `Visit successfully ${status === "DRAFT" ? "saved" : "submitted"}!`
+      );
+    }
+
+    setIsPending(false);
+  };
+
+  const handleKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    rowIndex: number,
+    cellIndex: number
+  ) => {
+    if (
+      e.key === "Tab" &&
+      !e.shiftKey &&
+      rowIndex === rows.length - 1 &&
+      cellIndex === 11
+    ) {
+      e.preventDefault();
+      addRow();
+      setTimeout(() => {
+        const nextInput = document.querySelector<HTMLInputElement>(
+          `[data-row-index="${rowIndex + 1}"][data-cell-index="1"]`
+        );
+        nextInput?.focus();
+      }, 0);
+    }
+  };
+
+  const headers = [
+    { label: "Sr. No" },
+    { label: "Date of Visit" },
+    { label: "Employee ID" },
+    { label: "Employee name" },
+    { label: "Mobile No." },
+    { label: "Branch Location" },
+    { label: "Product" },
+    { label: "Bucket/DPD" },
+    { label: "Time In" },
+    { label: "Time Out" },
+    { label: "Signature" },
+    { label: "Purpose of Visit" },
+  ];
+
+  const renderCell = (row: AgencyTableRow, key: keyof AgencyTableRow, rowIndex: number, cellIndex: number) => {
+    if (key === 'signature') {
+      return row.signature ? (
+        <span className="text-green-600 font-semibold">{row.signature}</span>
+      ) : (
+        <ApprovalButton 
+          rowId={row.id} 
+          onApprovalSuccess={handleApprovalSuccess} 
+        />
+      );
+    }
+    
+    // Define minimum widths for different columns to ensure visibility
+    const minWidths: { [key in keyof AgencyTableRow]?: string } = {
+        srNo: 'min-w-[60px]',
+        employeeName: 'min-w-[250px]',
+        branchLocation: 'min-w-[250px]',
+        purposeOfVisit: 'min-w-[300px]',
+        dateOfVisit: 'min-w-[120px]',
+        mobileNo: 'min-w-[150px]',
+        timeIn: 'min-w-[120px]',
+        timeOut: 'min-w-[120px]',
+    };
+
+    return (
+      <Input
+        type="text"
+        value={row[key]}
+        onChange={(e) =>
+          handleInputChange(
+            row.id,
+            key as keyof Omit<AgencyTableRow, "id">,
+            e.target.value
+          )
+        }
+        onKeyDown={(e) => handleKeyDown(e, rowIndex, cellIndex)}
+        data-row-index={rowIndex}
+        data-cell-index={cellIndex}
+        className={cn("w-full min-w-[180px]", minWidths[key])}
+        readOnly={key === "srNo" || key === "dateOfVisit" || key === "timeIn" || key === "timeOut"}
+        disabled={isPending}
+        required
+      />
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <PageHeader returnHref="/profile" returnLabel="Back to Profile" />
 
-      {/* Main Content */}
       <main className="p-8">
         <div className="container mx-auto">
-          {/* Centered Headings */}
           <div className="text-center mb-6">
             <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
               Bank Manager Agency Visit Register
@@ -87,111 +203,18 @@ export default function AgencyPage() {
             </p>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-            <PostsTable />
+            <TableForm
+              headers={headers}
+              rows={rows}
+              renderCell={renderCell}
+              onAddRow={addRow}
+              onSave={() => handleSaveOrSubmit("DRAFT")}
+              onSubmit={() => handleSaveOrSubmit("SUBMITTED")}
+              isPending={isPending}
+            />
           </div>
         </div>
       </main>
-    </div>
-  );
-}
-
-const PostsTable = () => {
-  const { rows, addRow, handleInputChange } = useTableRows(
-    5,
-    createNewAgencyRow
-  );
-
-  const handleKeyDown = (
-    e: React.KeyboardEvent<HTMLTextAreaElement>,
-    rowIndex: number,
-    cellIndex: number
-  ) => {
-    if (
-      e.key === "Tab" &&
-      !e.shiftKey &&
-      rowIndex === rows.length - 1 &&
-      cellIndex === 11 // Last cell
-    ) {
-      e.preventDefault();
-      addRow();
-      setTimeout(() => {
-        const nextInput = document.querySelector<HTMLTextAreaElement>(
-          `[data-row-index="${rowIndex + 1}"][data-cell-index="1"]`
-        );
-        nextInput?.focus();
-      }, 0);
-    }
-  };
-
-  const headers = [
-    "Sr. No",
-    "Date of Visit",
-    "Employee ID",
-    "Employee name",
-    "Mobile No.",
-    "Branch Location",
-    "Product",
-    "Bucket/DPD",
-    "Time In",
-    "Time Out",
-    "Signature",
-    "Purpose of Visit",
-  ];
-
-  return (
-    <div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full">
-          <thead className="bg-rose-800">
-            <tr>
-              {headers.map((header) => (
-                <th
-                  key={header}
-                  className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider"
-                >
-                  {header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {rows.map((row, rowIndex) => (
-              <tr key={row.id}>
-                {Object.keys(row)
-                  .filter((key) => key !== "id")
-                  .map((key, cellIndex) => (
-                    <td key={key} className="px-6 py-4 text-sm align-top">
-                      <AutoSizingTextarea
-                        value={row[key as keyof Omit<AgencyTableRow, "id">]}
-                        onChange={(e) =>
-                          handleInputChange(
-                            row.id,
-                            key as keyof Omit<AgencyTableRow, "id">,
-                            e.target.value
-                          )
-                        }
-                        onKeyDown={(e) => handleKeyDown(e, rowIndex, cellIndex)}
-                        data-row-index={rowIndex}
-                        data-cell-index={cellIndex}
-                        readOnly={key === "srNo"}
-                      />
-                    </td>
-                  ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="p-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex justify-end items-center gap-4">
-        <Button onClick={addRow} variant="outline">
-          <PlusCircle className="w-4 h-4 mr-2" />
-          Add Row
-        </Button>
-        <Button variant="secondary">Save</Button>
-        <Button className="bg-rose-800 hover:bg-rose-900 text-white">
-          Submit
-        </Button>
-      </div>
     </div>
   );
 };

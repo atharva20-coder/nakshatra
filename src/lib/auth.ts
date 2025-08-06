@@ -120,7 +120,7 @@ const options = {
   user: {
     additionalFields: {
       role: {
-        type: ["USER", "ADMIN"] as Array<UserRole>,
+        type: ["USER", "ADMIN", "AUDITOR", "COLLECTION_MANAGER"] as Array<UserRole>,
         input: false,
       }
     }

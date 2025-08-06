@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
   output   = "../src/generated/prisma"
@@ -14,68 +8,89 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserRole {
-  USER
-  ADMIN
-}
-
 model Post {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  title   String
-  content String
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  content   String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("posts")
 }
 
 model User {
-  id        String   @id @default(uuid())
-  createdAt DateTime
-  updatedAt DateTime
-
+  id            String        @id @default(uuid())
+  createdAt     DateTime
+  updatedAt     DateTime
   name          String
-  email         String    @unique
+  email         String        @unique
   emailVerified Boolean
   image         String?
-  role          UserRole  @default(USER)
+  role          UserRole      @default(USER)
   banned        Boolean?
   banReason     String?
   banExpires    DateTime?
-
-  sessions Session[]
-  accounts Account[]
-  posts    Post[]
+  accounts      Account[]
+  agencyVisits  AgencyVisit[]
+  posts         Post[]
+  sessions      Session[]
 
   @@map("users")
 }
 
-model Session {
-  id        String   @id @default(uuid())
-  createdAt DateTime
-  updatedAt DateTime
+model AgencyVisit {
+  id        String           @id @default(uuid())
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  status    SubmissionStatus @default(DRAFT)
+  agencyId  String
+  agency    User             @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  details   VisitDetail[]
 
+  @@map("agency_visits")
+}
+
+model VisitDetail {
+  id             String      @id @default(uuid())
+  srNo           String
+  dateOfVisit    String
+  employeeId     String
+  employeeName   String
+  mobileNo       String
+  branchLocation String
+  product        String
+  bucketDpd      String
+  timeIn         String
+  timeOut        String
+  signature      String
+  purposeOfVisit String
+  visitId        String
+  visit          AgencyVisit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+
+  @@map("visit_details")
+}
+
+model Session {
+  id             String   @id @default(uuid())
+  createdAt      DateTime
+  updatedAt      DateTime
   expiresAt      DateTime
   token          String   @unique
   ipAddress      String?
   userAgent      String?
   impersonatedBy String?
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("sessions")
 }
 
 model Account {
-  id        String   @id @default(uuid())
-  createdAt DateTime
-  updatedAt DateTime
-
+  id                    String    @id @default(uuid())
+  createdAt             DateTime
+  updatedAt             DateTime
   accountId             String
   providerId            String
   accessToken           String?
@@ -85,21 +100,31 @@ model Account {
   refreshTokenExpiresAt DateTime?
   scope                 String?
   password              String?
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("accounts")
 }
 
 model Verification {
-  id        String    @id @default(uuid())
-  createdAt DateTime?
-  updatedAt DateTime?
-
+  id         String    @id @default(uuid())
+  createdAt  DateTime?
+  updatedAt  DateTime?
   identifier String
   value      String
   expiresAt  DateTime
 
   @@map("verifications")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  AUDITOR
+  COLLECTION_MANAGER
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
 }

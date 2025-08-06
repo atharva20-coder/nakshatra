@@ -16,5 +16,11 @@ export const roles = {
     [UserRole.ADMIN]: ac.newRole({
         ...adminAc.statements,
         posts: ["create", "read", "update", "delete", "update:own", "delete:own", "ban", "unban"]
+    }),
+    [UserRole.AUDITOR]: ac.newRole({
+        posts: ["read"]
+    }),
+    [UserRole.COLLECTION_MANAGER]: ac.newRole({
+        posts: ["create", "read", "update", "delete"]
     })
 }

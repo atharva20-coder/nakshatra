@@ -29,5 +29,18 @@ export const useTableRows = <T extends { id: number }>(
     );
   };
 
-  return { rows, addRow, handleInputChange };
+  // New function to update a specific value in a row programmatically
+  const updateRowValue = (
+    id: number,
+    field: keyof Omit<T, "id">,
+    value: string
+  ) => {
+    setRows((prevRows) =>
+      prevRows.map((row) =>
+        row.id === id ? { ...row, [field]: value } : row
+      )
+    );
+  };
+
+  return { rows, addRow, handleInputChange, updateRowValue };
 };
