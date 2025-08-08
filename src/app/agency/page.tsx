@@ -1,220 +1,117 @@
+// src/app/agency/page.tsx
 "use client";
 
 import { PageHeader } from "@/components/agency-page-header";
-import { Input } from "@/components/ui/input";
-import { useTableRows } from "@/hooks/use-table-rows";
-import React, { useState } from "react";
-import { saveAgencyVisitAction } from "@/actions/save-agency-visit.action";
-import { toast } from "sonner";
-import { ApprovalButton } from "@/components/approval-button";
-import { TableForm } from "@/components/table-form";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
-// Interface for the table row data
-export interface AgencyTableRow {
-  id: number;
-  srNo: string;
-  dateOfVisit: string;
-  employeeId: string;
-  employeeName: string;
-  mobileNo: string;
-  branchLocation: string;
-  product: string;
-  bucketDpd: string;
-  timeIn: string;
-  timeOut: string;
-  signature: string;
-  purposeOfVisit: string;
-}
+// Mock data for the pending tasks table
+const pendingTasks = [
+  {
+    id: 1,
+    taskName: "Monthly Compliance Declaration",
+    dueDate: "2025-08-31",
+    status: "Pending",
+    href: "/agency/monthly-compliance-declaration",
+  },
+  {
+    id: 2,
+    taskName: "Agency Manpower Register Update",
+    dueDate: "2025-09-05",
+    status: "Pending",
+    href: "/agency/manpower-register",
+  },
+  {
+    id: 3,
+    taskName: "Code Of Conduct Acknowledgement",
+    dueDate: "2025-08-15",
+    status: "Overdue",
+    href: "/agency/code-of-conduct",
+  },
+    {
+    id: 4,
+    taskName: "Submit Payment Register",
+    dueDate: "2025-09-01",
+    status: "Pending",
+    href: "/agency/payment-register",
+  },
+];
 
-// Factory function for creating a new row
-const createNewAgencyRow = (id: number): AgencyTableRow => {
-  const now = new Date();
-  return {
-    id,
-    srNo: String(id),
-    dateOfVisit: now.toLocaleDateString(),
-    employeeId: "",
-    employeeName: "",
-    mobileNo: "",
-    branchLocation: "",
-    product: "",
-    bucketDpd: "",
-    timeIn: now.toLocaleTimeString(),
-    timeOut: "",
-    signature: "",
-    purposeOfVisit: "",
-  };
-};
-
-export default function AgencyPage() {
-  const { rows, addRow, handleInputChange, updateRowValue } = useTableRows(
-    1, // Table now starts with only one row
-    createNewAgencyRow
-  );
-  const [isPending, setIsPending] = useState(false);
-
-  const handleApprovalSuccess = (rowId: number) => {
-    const now = new Date();
-    updateRowValue(rowId, "timeOut", now.toLocaleTimeString());
-    updateRowValue(rowId, "signature", "Approved by Bank Manager");
-  };
-
-  const validateRows = (isSubmitting: boolean) => {
-    for (const row of rows) {
-      const fieldsToValidate: (keyof Omit<AgencyTableRow, "id">)[] = [
-        "employeeId", "employeeName", "mobileNo", "branchLocation", 
-        "product", "bucketDpd", "purposeOfVisit"
-      ];
-
-      for (const field of fieldsToValidate) {
-        if (!row[field] || row[field].trim() === '') {
-          toast.error(`Please fill out all fields in row ${row.srNo}.`);
-          return false;
-        }
-      }
-      
-      if (isSubmitting && !row.signature) {
-        toast.error(`Row ${row.srNo} must be approved before submitting.`);
-        return false;
-      }
-    }
-    return true;
-  };
-
-  const handleSaveOrSubmit = async (status: "DRAFT" | "SUBMITTED") => {
-    const isSubmitting = status === "SUBMITTED";
-    if (!validateRows(isSubmitting)) {
-      return;
-    }
-
-    setIsPending(true);
-    // FIX: Correctly destructure to exclude 'id' and resolve ESLint warning.
-    const rowsToSave = rows.map(({ id, ...rest }) => rest);
-    
-    const result = await saveAgencyVisitAction(rowsToSave, status);
-
-    if (result.error) {
-      toast.error(result.error);
-    } else {
-      toast.success(
-        `Visit successfully ${status === "DRAFT" ? "saved" : "submitted"}!`
-      );
-    }
-
-    setIsPending(false);
-  };
-
-  const handleKeyDown = (
-    e: React.KeyboardEvent<HTMLInputElement>,
-    rowIndex: number,
-    cellIndex: number
-  ) => {
-    if (
-      e.key === "Tab" &&
-      !e.shiftKey &&
-      rowIndex === rows.length - 1 &&
-      cellIndex === 11
-    ) {
-      e.preventDefault();
-      addRow();
-      setTimeout(() => {
-        const nextInput = document.querySelector<HTMLInputElement>(
-          `[data-row-index="${rowIndex + 1}"][data-cell-index="1"]`
-        );
-        nextInput?.focus();
-      }, 0);
-    }
-  };
-
-  const headers = [
-    { label: "Sr. No" },
-    { label: "Date of Visit" },
-    { label: "Employee ID" },
-    { label: "Employee name" },
-    { label: "Mobile No." },
-    { label: "Branch Location" },
-    { label: "Product" },
-    { label: "Bucket/DPD" },
-    { label: "Time In" },
-    { label: "Time Out" },
-    { label: "Signature" },
-    { label: "Purpose of Visit" },
-  ];
-
-  const renderCell = (row: AgencyTableRow, key: keyof AgencyTableRow, rowIndex: number, cellIndex: number) => {
-    if (key === 'signature') {
-      return row.signature ? (
-        <span className="text-green-600 font-semibold">{row.signature}</span>
-      ) : (
-        <ApprovalButton 
-          rowId={row.id} 
-          onApprovalSuccess={handleApprovalSuccess} 
-        />
-      );
-    }
-    
-    // Define minimum widths for different columns to ensure visibility
-    const minWidths: { [key in keyof AgencyTableRow]?: string } = {
-        srNo: 'min-w-[60px]',
-        employeeName: 'min-w-[250px]',
-        branchLocation: 'min-w-[250px]',
-        purposeOfVisit: 'min-w-[300px]',
-        dateOfVisit: 'min-w-[120px]',
-        mobileNo: 'min-w-[150px]',
-        timeIn: 'min-w-[120px]',
-        timeOut: 'min-w-[120px]',
-    };
-
-    return (
-      <Input
-        type="text"
-        value={row[key]}
-        onChange={(e) =>
-          handleInputChange(
-            row.id,
-            key as keyof Omit<AgencyTableRow, "id">,
-            e.target.value
-          )
-        }
-        onKeyDown={(e) => handleKeyDown(e, rowIndex, cellIndex)}
-        data-row-index={rowIndex}
-        data-cell-index={cellIndex}
-        className={cn("w-full min-w-[180px]", minWidths[key])}
-        readOnly={key === "srNo" || key === "dateOfVisit" || key === "timeIn" || key === "timeOut"}
-        disabled={isPending}
-        required
-      />
-    );
-  };
-
+export default function AgencyDashboardPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <PageHeader returnHref="/profile" returnLabel="Back to Profile" />
 
       <main className="p-8">
         <div className="container mx-auto">
-          <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
-              Bank Manager Agency Visit Register
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-200">
+              Agency Dashboard
             </h2>
-            <p className="text-lg text-gray-600 dark:text-gray-400">
-              Agency Visit Details
+            <p className="text-lg text-gray-600 dark:text-gray-400 mt-2">
+              Welcome! Here are your pending tasks and quick actions.
             </p>
           </div>
+
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-            <TableForm
-              headers={headers}
-              rows={rows}
-              renderCell={renderCell}
-              onAddRow={addRow}
-              onSave={() => handleSaveOrSubmit("DRAFT")}
-              onSubmit={() => handleSaveOrSubmit("SUBMITTED")}
-              isPending={isPending}
-            />
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300">
+                Pending Tasks
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead className="bg-gray-100 dark:bg-gray-700">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      Task Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      Due Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  {pendingTasks.map((task) => (
+                    <tr key={task.id}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {task.taskName}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {task.dueDate}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <span
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            task.status === "Overdue"
+                              ? "bg-red-100 text-red-800"
+                              : "bg-yellow-100 text-yellow-800"
+                          }`}
+                        >
+                          {task.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <Button asChild variant="link" className="text-rose-600 p-0 h-auto">
+                            <Link href={task.href}>
+                                View Task
+                            </Link>
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </main>
     </div>
   );
-};
+}

@@ -1,3 +1,4 @@
+// src/components/agency-page-header.tsx
 "use client";
 
 import React from "react";
@@ -49,30 +50,28 @@ const DropdownMenu = ({
 
 // Data for the dropdown menus
 const declarationLinks: DropdownLink[] = [
-  { href: "#", label: "Undertaking" },
-  { href: "#", label: "Monthly Compliance declaration (Monthly)" },
-  { href: "#", label: "Asset Management Declaration" },
-  { href: "#", label: "Telephone line Declaration" },
-  { href: "#", label: "Product declaration" },
-  { href: "#", label: "No Dues and Data Purging (Monthly)" },
+    { href: "/agency/code-of-conduct", label: "Code Of Conduct" },
+    { href: "/agency/declaration-cum-undertaking", label: "Declaration Cum Undertaking" },
+    { href: "/agency/monthly-compliance-declaration", label: "Monthly Compliance Declaration" },
+    { href: "/agency/asset-management-declaration", label: "Asset Management Declaration" },
+    { href: "/agency/telephone-lines-declaration", label: "Telephone Lines Declaration" },
+    { href: "/agency/declaration-of-product", label: "Declaration Of Product" },
 ];
 
-// FIX: Created unique placeholder links for each dropdown
-const editLinks: DropdownLink[] = [
-  { href: "#", label: "Edit Item 1" },
-  { href: "#", label: "Edit Item 2" },
+const registerLinks: DropdownLink[] = [
+    { href: "/agency/visit-details", label: "Agency Visit Details" },
+    { href: "/agency/manpower-register", label: "Agency Manpower Register" },
+    { href: "/agency/payment-register", label: "Payment Register" },
 ];
 
-const viewLinks: DropdownLink[] = [
-  { href: "#", label: "View Details" },
-  { href: "#", label: "View Summary" },
-  { href: "#", label: "View Report" },
+const trackerLinks: DropdownLink[] = [
+    { href: "/agency/penalty-matrix", label: "Agency Penalty Matrix" },
+    { href: "/agency/training-tracker", label: "Agency Training Tracker" },
+    { href: "/agency/proactive-escalation-management-tracker", label: "Proactive Escalation Management Tracker" },
+    { href: "/agency/escalation-details", label: "Escalation Details" },
+    { href: "/agency/repo-kit-tracker", label: "Repo Kit Tracker" },
 ];
 
-const actionLinks: DropdownLink[] = [
-  { href: "#", label: "Perform Action A" },
-  { href: "#", label: "Perform Action B" },
-];
 
 export const PageHeader = ({ returnHref, returnLabel }: PageHeaderProps) => {
   return (
@@ -96,9 +95,8 @@ export const PageHeader = ({ returnHref, returnLabel }: PageHeaderProps) => {
         {/* Right Side: Dropdown Menus */}
         <div className="flex-shrink-0 flex items-center gap-8">
           <DropdownMenu label="Declarations" links={declarationLinks} />
-          <DropdownMenu label="Edit" links={editLinks} />
-          <DropdownMenu label="View" links={viewLinks} />
-          <DropdownMenu label="Actions" links={actionLinks} />
+          <DropdownMenu label="Registers" links={registerLinks} />
+          <DropdownMenu label="Trackers" links={trackerLinks} />
         </div>
       </div>
     </header>

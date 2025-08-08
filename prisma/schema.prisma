@@ -1,3 +1,8 @@
+// datasource db {
+//   provider = "postgresql"
+//   url      = env("DATABASE_URL")
+// }
+
 generator client {
   provider = "prisma-client-js"
   output   = "../src/generated/prisma"
@@ -21,21 +26,34 @@ model Post {
 }
 
 model User {
-  id            String        @id @default(uuid())
-  createdAt     DateTime
-  updatedAt     DateTime
-  name          String
-  email         String        @unique
-  emailVerified Boolean
-  image         String?
-  role          UserRole      @default(USER)
-  banned        Boolean?
-  banReason     String?
-  banExpires    DateTime?
-  accounts      Account[]
-  agencyVisits  AgencyVisit[]
-  posts         Post[]
-  sessions      Session[]
+  id                            String                          @id @default(uuid())
+  createdAt                     DateTime
+  updatedAt                     DateTime
+  name                          String
+  email                         String                          @unique
+  emailVerified                 Boolean
+  image                         String?
+  role                          UserRole                        @default(USER)
+  banned                        Boolean?
+  banReason                     String?
+  banExpires                    DateTime?
+  accounts                      Account[]
+  agencyVisits                  AgencyVisit[]
+  posts                         Post[]
+  sessions                      Session[]
+  CodeOfConduct                 CodeOfConduct[]
+  DeclarationCumUndertaking     DeclarationCumUndertaking[]
+  MonthlyComplianceDeclaration  MonthlyComplianceDeclaration[]
+  AssetManagementDeclaration    AssetManagementDeclaration[]
+  TelephoneLinesDeclaration     TelephoneLinesDeclaration[]
+  AgencyManpowerRegister        AgencyManpowerRegister[]
+  DeclarationOfProduct          DeclarationOfProduct[]
+  AgencyPenaltyMatrix           AgencyPenaltyMatrix[]
+  AgencyTrainingTracker         AgencyTrainingTracker[]
+  ProactiveEscalationManagement ProactiveEscalationManagement[]
+  EscalationDetails             EscalationDetails[]
+  PaymentRegister               PaymentRegister[]
+  RepoKitTracker                RepoKitTracker[]
 
   @@map("users")
 }
@@ -115,6 +133,217 @@ model Verification {
   expiresAt  DateTime
 
   @@map("verifications")
+}
+
+model CodeOfConduct {
+  id        String   @id @default(uuid())
+  name      String
+  signature String
+  date      DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("code_of_conduct")
+}
+
+model DeclarationCumUndertaking {
+  id                      String @id @default(uuid())
+  collectionManagerName   String
+  collectionManagerEmpId  String
+  collectionManagerSign   String
+  userId                  String
+  user                    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("declaration_cum_undertaking")
+}
+
+model MonthlyComplianceDeclaration {
+  id                      String   @id @default(uuid())
+  srNo                    String
+  complianceParameters    String
+  complied                String
+  agencyRemarks           String
+  collectionManagerName   String
+  collectionManagerEmpId  String
+  collectionManagerSign   String
+  date                    DateTime @default(now())
+  userId                  String
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("monthly_compliance_declaration")
+}
+
+model AssetManagementDeclaration {
+  id                       String @id @default(uuid())
+  srNo                     String
+  systemCpuSerialNo        String
+  ipAddress                String
+  executiveName            String
+  idCardNumber             String
+  printerAccess            String
+  assetPermanentlyDisposed String
+  userId                   String
+  user                     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("asset_management_declaration")
+}
+
+model TelephoneLinesDeclaration {
+  id                String @id @default(uuid())
+  srNo              String
+  telephoneNo       String
+  username          String
+  executiveCategory String
+  recordingLine     String
+  remarks           String
+  userId            String
+  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("telephone_lines_declaration")
+}
+
+model AgencyManpowerRegister {
+  id                       String   @id @default(uuid())
+  srNo                     String
+  executiveCategory        String
+  hhdIdOfFos               String
+  axisIdOfFos              String
+  fosFullName              String
+  dateOfJoining            DateTime
+  product                  String
+  cocSigned                String
+  collectionManagerName    String
+  collectionManagerId      String
+  collectionManagerSign    String
+  dateOfResignation        DateTime?
+  idCardIssuanceDate       DateTime
+  idCardReturnExpiryDate   DateTime
+  executiveSignature       String
+  remarks                  String
+  userId                   String
+  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("agency_manpower_register")
+}
+
+model DeclarationOfProduct {
+  id                        String @id @default(uuid())
+  product                   String
+  busket                    String
+  countOfCaseAllocated      String
+  collectionManagerName     String
+  collectionManagerLocation String
+  cmSign                    String
+  userId                    String
+  user                      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("declaration_of_product")
+}
+
+model AgencyPenaltyMatrix {
+  id                         String   @id @default(uuid())
+  noticeRefNo                String
+  nonComplianceMonth         String
+  parameter                  String
+  product                    String
+  penaltyAmount              String
+  penaltyDeductedMonth       String
+  correctiveActionTaken      String
+  agency                     String
+  agencyAuthorizedPersonSign String
+  signOfFpr                  String
+  userId                     String
+  user                       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("agency_penalty_matrix")
+}
+
+model AgencyTrainingTracker {
+  id             String   @id @default(uuid())
+  dateOfTraining DateTime
+  trainingAgenda String
+  trainingName   String
+  trainerName    String
+  trainerEmpId   String
+  noOfAttendees  String
+  trainerRemarks String
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("agency_training_tracker")
+}
+
+model ProactiveEscalationManagement {
+  id                            String   @id @default(uuid())
+  lanOrCardNo                   String
+  customerName                  String
+  product                       String
+  currentBucket                 String
+  dateOfContact                 DateTime
+  modeOfContact                 String
+  dateOfTrailUploaded           DateTime
+  reasonForTagging              String
+  collectionManagerNameAndEmpId String
+  userId                        String
+  user                          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("proactive_escalation_management")
+}
+
+model EscalationDetails {
+  id                      String   @id @default(uuid())
+  customerName            String
+  loanOrCardNo            String
+  productBucketDpd        String
+  dateOfEscalation        DateTime
+  escalationDetail        String
+  collectionManagerRemark String
+  collectionManagerSign   String
+  userId                  String
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("escalation_details")
+}
+
+model PaymentRegister {
+  id                   String   @id @default(uuid())
+  srNo                 String
+  month                String
+  eReceiptNo           String
+  acNo                 String
+  customerName         String
+  receiptAmnt          String
+  modeOfPayment        String
+  depositionDate       DateTime
+  fosHhdId             String
+  fosName              String
+  fosSign              String
+  cmName               String
+  cmVerificationStatus String
+  remarks              String
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("payment_register")
+}
+
+model RepoKitTracker {
+  id                    String    @id @default(uuid())
+  srNo                  String
+  repoKitNo             String
+  issueDateFromBank     DateTime
+  lanNo                 String
+  product               String
+  bucketDpd             String
+  usedUnused            String
+  executiveSign         String
+  dateOfReturnToCO      DateTime?
+  collectionManagerEmpId String
+  collectionManagerSign String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("repo_kit_tracker")
 }
 
 enum UserRole {

@@ -1,13 +1,15 @@
+// src/components/table-form.tsx
 "use client";
 
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { PlusCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TableColumn } from "@/lib/table-definitions";
 
 // Generic props for the reusable table form
 interface TableFormProps<T> {
-  headers: { label: string; className?: string }[];
+  headers: TableColumn[];
   rows: T[];
   renderCell: (row: T, key: keyof T, rowIndex: number, cellIndex: number) => React.ReactNode;
   onAddRow: () => void;
@@ -33,10 +35,9 @@ export const TableForm = <T extends { id: number }>({
             <tr>
               {headers.map((header) => (
                 <th
-                  key={header.label}
+                  key={header.key}
                   className={cn(
-                    "px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider",
-                    header.className
+                    "px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider"
                   )}
                 >
                   {header.label}
