@@ -1,8 +1,4 @@
-// datasource db {
-//   provider = "postgresql"
-//   url      = env("DATABASE_URL")
-// }
-
+// Complete Prisma Schema for Bank Portal
 generator client {
   provider = "prisma-client-js"
   output   = "../src/generated/prisma"
@@ -26,38 +22,102 @@ model Post {
 }
 
 model User {
-  id                            String                          @id @default(uuid())
-  createdAt                     DateTime
-  updatedAt                     DateTime
-  name                          String
-  email                         String                          @unique
-  emailVerified                 Boolean
-  image                         String?
-  role                          UserRole                        @default(USER)
-  banned                        Boolean?
-  banReason                     String?
-  banExpires                    DateTime?
-  accounts                      Account[]
-  agencyVisits                  AgencyVisit[]
-  posts                         Post[]
-  sessions                      Session[]
-  CodeOfConduct                 CodeOfConduct[]
-  DeclarationCumUndertaking     DeclarationCumUndertaking[]
-  MonthlyComplianceDeclaration  MonthlyComplianceDeclaration[]
-  AssetManagementDeclaration    AssetManagementDeclaration[]
-  TelephoneLinesDeclaration     TelephoneLinesDeclaration[]
-  AgencyManpowerRegister        AgencyManpowerRegister[]
-  DeclarationOfProduct          DeclarationOfProduct[]
-  AgencyPenaltyMatrix           AgencyPenaltyMatrix[]
-  AgencyTrainingTracker         AgencyTrainingTracker[]
-  ProactiveEscalationManagement ProactiveEscalationManagement[]
-  EscalationDetails             EscalationDetails[]
-  PaymentRegister               PaymentRegister[]
-  RepoKitTracker                RepoKitTracker[]
+  id                                String                              @id @default(uuid())
+  createdAt                         DateTime
+  updatedAt                         DateTime
+  name                              String
+  email                             String                              @unique
+  emailVerified                     Boolean
+  image                             String?
+  role                              UserRole                            @default(USER)
+  banned                            Boolean?
+  banReason                         String?
+  banExpires                        DateTime?
+  accounts                          Account[]
+  
+  // Form Relations
+  codeOfConduct                     CodeOfConduct[]
+  declarationCumUndertaking         DeclarationCumUndertaking[]
+  agencyVisits                      AgencyVisit[]
+  monthlyCompliance                 MonthlyCompliance[]
+  assetManagement                   AssetManagement[]
+  telephoneDeclaration              TelephoneDeclaration[]
+  agencyManpowerRegister            AgencyManpowerRegister[]
+  productDeclaration                ProductDeclaration[]
+  agencyPenaltyMatrix               AgencyPenaltyMatrix[]
+  agencyTrainingTracker             AgencyTrainingTracker[]
+  proactiveEscalationTracker        ProactiveEscalationTracker[]
+  escalationDetails                 EscalationDetails[]
+  paymentRegister                   PaymentRegister[]
+  repoKitTracker                    RepoKitTracker[]
+  
+  posts                             Post[]
+  sessions                          Session[]
+  approvalRequests                  ApprovalRequest[]
+  monthlySubmissions                MonthlySubmission[]
 
   @@map("users")
 }
 
+// Monthly Submissions Tracking
+model MonthlySubmission {
+  id            String           @id @default(uuid())
+  userId        String
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  month         Int              // 1-12
+  year          Int
+  submittedAt   DateTime?
+  autoSubmitted Boolean          @default(false)
+  status        SubmissionStatus @default(DRAFT)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@unique([userId, month, year])
+  @@map("monthly_submissions")
+}
+
+// 1. Code of Conduct
+model CodeOfConduct {
+  id                String           @id @default(uuid())
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  userId            String
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status            SubmissionStatus @default(DRAFT)
+  
+  name              String           // Proprietor/Partner/Director
+  signature         String
+  date              DateTime
+  
+  @@map("code_of_conduct")
+}
+
+// 2. Declaration Cum Undertaking
+model DeclarationCumUndertaking {
+  id                          String                            @id @default(uuid())
+  createdAt                   DateTime                          @default(now())
+  updatedAt                   DateTime                          @updatedAt
+  userId                      String
+  user                        User                              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status                      SubmissionStatus                  @default(DRAFT)
+  
+  collectionManagers          DeclarationCollectionManager[]
+  
+  @@map("declaration_cum_undertaking")
+}
+
+model DeclarationCollectionManager {
+  id                    String                    @id @default(uuid())
+  name                  String
+  employeeId            String
+  signature             String
+  declarationId         String
+  declaration           DeclarationCumUndertaking @relation(fields: [declarationId], references: [id], onDelete: Cascade)
+  
+  @@map("declaration_collection_managers")
+}
+
+// 3. Agency Visit Details (Already implemented, keeping for consistency)
 model AgencyVisit {
   id        String           @id @default(uuid())
   createdAt DateTime         @default(now())
@@ -88,6 +148,372 @@ model VisitDetail {
   visit          AgencyVisit @relation(fields: [visitId], references: [id], onDelete: Cascade)
 
   @@map("visit_details")
+}
+
+// 4. Monthly Compliance Declaration
+model MonthlyCompliance {
+  id        String           @id @default(uuid())
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    SubmissionStatus @default(DRAFT)
+  details   MonthlyComplianceDetail[]
+
+  @@map("monthly_compliance")
+}
+
+model MonthlyComplianceDetail {
+  id                      String            @id @default(uuid())
+  srNo                    String
+  complianceParameters    String
+  complied                String            // Yes/No/NA
+  agencyRemarks           String?
+  collectionManagerName   String
+  collectionManagerEmpId  String
+  collectionManagerSign   String
+  date                    DateTime
+  complianceId            String
+  compliance              MonthlyCompliance @relation(fields: [complianceId], references: [id], onDelete: Cascade)
+
+  @@map("monthly_compliance_details")
+}
+
+// 5. Asset Management Declaration
+model AssetManagement {
+  id        String           @id @default(uuid())
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    SubmissionStatus @default(DRAFT)
+  details   AssetManagementDetail[]
+
+  @@map("asset_management")
+}
+
+model AssetManagementDetail {
+  id                    String          @id @default(uuid())
+  srNo                  String
+  systemCpuSerialNo     String
+  ipAddress             String
+  executiveName         String
+  idCardNumber          String
+  printerAccess         String          // Yes/No with reason
+  assetDisposed         String          // data purged info
+  assetManagementId     String
+  assetManagement       AssetManagement @relation(fields: [assetManagementId], references: [id], onDelete: Cascade)
+
+  @@map("asset_management_details")
+}
+
+// 6. Telephone Lines Declaration
+model TelephoneDeclaration {
+  id        String           @id @default(uuid())
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    SubmissionStatus @default(DRAFT)
+  details   TelephoneDetail[]
+
+  @@map("telephone_declaration")
+}
+
+model TelephoneDetail {
+  id                    String              @id @default(uuid())
+  srNo                  String
+  telephoneNo           String
+  username              String
+  executiveCategory     String
+  recordingLine         String              // Yes/No
+  remarks               String?
+  telephoneDeclarationId String
+  telephoneDeclaration  TelephoneDeclaration @relation(fields: [telephoneDeclarationId], references: [id], onDelete: Cascade)
+
+  @@map("telephone_details")
+}
+
+// 7. Agency Manpower Register
+model AgencyManpowerRegister {
+  id        String           @id @default(uuid())
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    SubmissionStatus @default(DRAFT)
+  details   ManpowerDetail[]
+
+  @@map("agency_manpower_register")
+}
+
+model ManpowerDetail {
+  id                      String                 @id @default(uuid())
+  srNo                    String
+  executiveCategory       String                 // FOS/Tele-caller/Tracer/Backend
+  hhdIdOfFos             String?
+  axisIdOfFos            String?
+  fosFullName            String
+  dateOfJoining          DateTime
+  product                String
+  cocSigned              String                 // Yes/No
+  collectionManagerName  String
+  collectionManagerId    String
+  collectionManagerSign  String
+  dateOfResignation      DateTime?
+  idCardsIssuanceDate    DateTime?
+  idCardReturnDate       DateTime?
+  executiveSignature     String
+  remarks                String?
+  manpowerRegisterId     String
+  manpowerRegister       AgencyManpowerRegister @relation(fields: [manpowerRegisterId], references: [id], onDelete: Cascade)
+
+  @@map("manpower_details")
+}
+
+// 8. Declaration of Product
+model ProductDeclaration {
+  id        String           @id @default(uuid())
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    SubmissionStatus @default(DRAFT)
+  details   ProductDetail[]
+
+  @@map("product_declaration")
+}
+
+model ProductDetail {
+  id                        String             @id @default(uuid())
+  product                   String
+  bucket                    String
+  countOfCaseAllocated      Int
+  collectionManagerName     String
+  collectionManagerLocation String
+  cmSign                    String
+  productDeclarationId      String
+  productDeclaration        ProductDeclaration @relation(fields: [productDeclarationId], references: [id], onDelete: Cascade)
+
+  @@map("product_details")
+}
+
+// 9. Agency Penalty Matrix
+model AgencyPenaltyMatrix {
+  id        String           @id @default(uuid())
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    SubmissionStatus @default(DRAFT)
+  details   PenaltyDetail[]
+
+  @@map("agency_penalty_matrix")
+}
+
+model PenaltyDetail {
+  id                          String              @id @default(uuid())
+  noticeRefNo                 String
+  nonComplianceMonth          String
+  parameter                   String
+  product                     String
+  penaltyAmount               Decimal
+  penaltyDeductedMonth        String
+  correctiveActionTaken       String
+  agency                      String
+  agencyAuthorisedPersonSign  String
+  signOfFpr                   String
+  penaltyMatrixId             String
+  penaltyMatrix               AgencyPenaltyMatrix @relation(fields: [penaltyMatrixId], references: [id], onDelete: Cascade)
+
+  @@map("penalty_details")
+}
+
+// 10. Agency Training Tracker
+model AgencyTrainingTracker {
+  id        String           @id @default(uuid())
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    SubmissionStatus @default(DRAFT)
+  details   TrainingDetail[]
+
+  @@map("agency_training_tracker")
+}
+
+model TrainingDetail {
+  id                  String                @id @default(uuid())
+  dateOfTraining      DateTime
+  trainingAgenda      String
+  trainingName        String
+  trainerName         String
+  trainerEmpId        String
+  noOfAttendees       Int
+  trainerRemarks      String?
+  trainingTrackerId   String
+  trainingTracker     AgencyTrainingTracker @relation(fields: [trainingTrackerId], references: [id], onDelete: Cascade)
+
+  @@map("training_details")
+}
+
+// 11. Proactive Escalation Management Tracker
+model ProactiveEscalationTracker {
+  id        String           @id @default(uuid())
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    SubmissionStatus @default(DRAFT)
+  details   ProactiveEscalationDetail[]
+
+  @@map("proactive_escalation_tracker")
+}
+
+model ProactiveEscalationDetail {
+  id                        String                     @id @default(uuid())
+  lanCardNo                 String
+  customerName              String
+  product                   String
+  currentBucket             String
+  dateOfContact             DateTime
+  modeOfContact             String                     // Field Visit/Call
+  dateOfTrailUploaded       DateTime?
+  listOfCaseWithReasons     String
+  collectionManagerNameId   String
+  escalationTrackerId       String
+  escalationTracker         ProactiveEscalationTracker @relation(fields: [escalationTrackerId], references: [id], onDelete: Cascade)
+
+  @@map("proactive_escalation_details")
+}
+
+// 12. Escalation Details
+model EscalationDetails {
+  id        String           @id @default(uuid())
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    SubmissionStatus @default(DRAFT)
+  details   EscalationDetail[]
+
+  @@map("escalation_details_form")
+}
+
+model EscalationDetail {
+  id                        String            @id @default(uuid())
+  customerName              String
+  loanCardNo                String
+  productBucketDpd          String
+  dateEscalation            DateTime
+  escalationDetail          String
+  collectionManagerRemark   String?
+  collectionManagerSign     String
+  escalationDetailsId       String
+  escalationDetails         EscalationDetails @relation(fields: [escalationDetailsId], references: [id], onDelete: Cascade)
+
+  @@map("escalation_detail_entries")
+}
+
+// 13. Payment Register
+model PaymentRegister {
+  id        String           @id @default(uuid())
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    SubmissionStatus @default(DRAFT)
+  details   PaymentDetail[]
+
+  @@map("payment_register")
+}
+
+model PaymentDetail {
+  id                    String         @id @default(uuid())
+  srNo                  String
+  month                 String
+  eReceiptNo            String
+  accountNo             String
+  customerName          String
+  receiptAmount         Decimal
+  modeOfPayment         String
+  depositionDate        DateTime
+  fosHhdId              String
+  fosName               String
+  fosSign               String
+  cmName                String
+  cmVerificationStatus  String
+  remarks               String?
+  paymentRegisterId     String
+  paymentRegister       PaymentRegister @relation(fields: [paymentRegisterId], references: [id], onDelete: Cascade)
+
+  @@map("payment_details")
+}
+
+// 14. Repo Kit Tracker
+model RepoKitTracker {
+  id        String           @id @default(uuid())
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    SubmissionStatus @default(DRAFT)
+  details   RepoKitDetail[]
+
+  @@map("repo_kit_tracker")
+}
+
+model RepoKitDetail {
+  id                      String        @id @default(uuid())
+  srNo                    String
+  repoKitNo               String
+  issueDateFromBank       DateTime
+  lanNo                   String
+  product                 String
+  bucketDpd               String
+  usedUnused              String        // Used/Unused
+  executiveSign           String
+  dateOfReturnToCo        DateTime?
+  collectionManagerEmpId  String
+  collectionManagerSign   String
+  repoKitTrackerId        String
+  repoKitTracker          RepoKitTracker @relation(fields: [repoKitTrackerId], references: [id], onDelete: Cascade)
+
+  @@map("repo_kit_details")
+}
+
+// Approval Request System
+model ApprovalRequest {
+  id            String            @id @default(uuid())
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  userId        String
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  formType      String            // Type of form being requested for approval
+  formId        String            // ID of the specific form record
+  requestType   ApprovalType
+  reason        String
+  documentPath  String?           // Path to uploaded proof document
+  status        ApprovalStatus    @default(PENDING)
+  adminResponse String?
+  reviewedAt    DateTime?
+  reviewedBy    String?
+
+  @@map("approval_requests")
+}
+
+// File Upload Management
+model UploadedFile {
+  id            String   @id @default(uuid())
+  createdAt     DateTime @default(now())
+  fileName      String
+  originalName  String
+  filePath      String
+  fileSize      Int      // in bytes
+  mimeType      String
+  uploadedBy    String   // User ID
+
+  @@map("uploaded_files")
 }
 
 model Session {
@@ -135,217 +561,6 @@ model Verification {
   @@map("verifications")
 }
 
-model CodeOfConduct {
-  id        String   @id @default(uuid())
-  name      String
-  signature String
-  date      DateTime @default(now())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("code_of_conduct")
-}
-
-model DeclarationCumUndertaking {
-  id                      String @id @default(uuid())
-  collectionManagerName   String
-  collectionManagerEmpId  String
-  collectionManagerSign   String
-  userId                  String
-  user                    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("declaration_cum_undertaking")
-}
-
-model MonthlyComplianceDeclaration {
-  id                      String   @id @default(uuid())
-  srNo                    String
-  complianceParameters    String
-  complied                String
-  agencyRemarks           String
-  collectionManagerName   String
-  collectionManagerEmpId  String
-  collectionManagerSign   String
-  date                    DateTime @default(now())
-  userId                  String
-  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("monthly_compliance_declaration")
-}
-
-model AssetManagementDeclaration {
-  id                       String @id @default(uuid())
-  srNo                     String
-  systemCpuSerialNo        String
-  ipAddress                String
-  executiveName            String
-  idCardNumber             String
-  printerAccess            String
-  assetPermanentlyDisposed String
-  userId                   String
-  user                     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("asset_management_declaration")
-}
-
-model TelephoneLinesDeclaration {
-  id                String @id @default(uuid())
-  srNo              String
-  telephoneNo       String
-  username          String
-  executiveCategory String
-  recordingLine     String
-  remarks           String
-  userId            String
-  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("telephone_lines_declaration")
-}
-
-model AgencyManpowerRegister {
-  id                       String   @id @default(uuid())
-  srNo                     String
-  executiveCategory        String
-  hhdIdOfFos               String
-  axisIdOfFos              String
-  fosFullName              String
-  dateOfJoining            DateTime
-  product                  String
-  cocSigned                String
-  collectionManagerName    String
-  collectionManagerId      String
-  collectionManagerSign    String
-  dateOfResignation        DateTime?
-  idCardIssuanceDate       DateTime
-  idCardReturnExpiryDate   DateTime
-  executiveSignature       String
-  remarks                  String
-  userId                   String
-  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("agency_manpower_register")
-}
-
-model DeclarationOfProduct {
-  id                        String @id @default(uuid())
-  product                   String
-  busket                    String
-  countOfCaseAllocated      String
-  collectionManagerName     String
-  collectionManagerLocation String
-  cmSign                    String
-  userId                    String
-  user                      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("declaration_of_product")
-}
-
-model AgencyPenaltyMatrix {
-  id                         String   @id @default(uuid())
-  noticeRefNo                String
-  nonComplianceMonth         String
-  parameter                  String
-  product                    String
-  penaltyAmount              String
-  penaltyDeductedMonth       String
-  correctiveActionTaken      String
-  agency                     String
-  agencyAuthorizedPersonSign String
-  signOfFpr                  String
-  userId                     String
-  user                       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("agency_penalty_matrix")
-}
-
-model AgencyTrainingTracker {
-  id             String   @id @default(uuid())
-  dateOfTraining DateTime
-  trainingAgenda String
-  trainingName   String
-  trainerName    String
-  trainerEmpId   String
-  noOfAttendees  String
-  trainerRemarks String
-  userId         String
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("agency_training_tracker")
-}
-
-model ProactiveEscalationManagement {
-  id                            String   @id @default(uuid())
-  lanOrCardNo                   String
-  customerName                  String
-  product                       String
-  currentBucket                 String
-  dateOfContact                 DateTime
-  modeOfContact                 String
-  dateOfTrailUploaded           DateTime
-  reasonForTagging              String
-  collectionManagerNameAndEmpId String
-  userId                        String
-  user                          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("proactive_escalation_management")
-}
-
-model EscalationDetails {
-  id                      String   @id @default(uuid())
-  customerName            String
-  loanOrCardNo            String
-  productBucketDpd        String
-  dateOfEscalation        DateTime
-  escalationDetail        String
-  collectionManagerRemark String
-  collectionManagerSign   String
-  userId                  String
-  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("escalation_details")
-}
-
-model PaymentRegister {
-  id                   String   @id @default(uuid())
-  srNo                 String
-  month                String
-  eReceiptNo           String
-  acNo                 String
-  customerName         String
-  receiptAmnt          String
-  modeOfPayment        String
-  depositionDate       DateTime
-  fosHhdId             String
-  fosName              String
-  fosSign              String
-  cmName               String
-  cmVerificationStatus String
-  remarks              String
-  userId               String
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("payment_register")
-}
-
-model RepoKitTracker {
-  id                    String    @id @default(uuid())
-  srNo                  String
-  repoKitNo             String
-  issueDateFromBank     DateTime
-  lanNo                 String
-  product               String
-  bucketDpd             String
-  usedUnused            String
-  executiveSign         String
-  dateOfReturnToCO      DateTime?
-  collectionManagerEmpId String
-  collectionManagerSign String
-  userId                String
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("repo_kit_tracker")
-}
-
 enum UserRole {
   USER
   ADMIN
@@ -356,4 +571,18 @@ enum UserRole {
 enum SubmissionStatus {
   DRAFT
   SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum ApprovalType {
+  UPDATE_SUBMITTED_FORM
+  UPDATE_PREVIOUS_MONTH
+  DELETE_RECORD
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }

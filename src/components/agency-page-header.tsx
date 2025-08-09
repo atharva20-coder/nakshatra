@@ -50,26 +50,26 @@ const DropdownMenu = ({
 
 // Data for the dropdown menus
 const declarationLinks: DropdownLink[] = [
-    { href: "/agency/code-of-conduct", label: "Code Of Conduct" },
-    { href: "/agency/declaration-cum-undertaking", label: "Declaration Cum Undertaking" },
-    { href: "/agency/monthly-compliance-declaration", label: "Monthly Compliance Declaration" },
-    { href: "/agency/asset-management-declaration", label: "Asset Management Declaration" },
-    { href: "/agency/telephone-lines-declaration", label: "Telephone Lines Declaration" },
-    { href: "/agency/declaration-of-product", label: "Declaration Of Product" },
+    { href: "/forms/code-of-conduct", label: "Code Of Conduct" },
+    { href: "/forms/declaration-cum-undertaking", label: "Declaration Cum Undertaking" },
+    { href: "/forms/monthly-compliance-declaration", label: "Monthly Compliance Declaration" },
+    { href: "/forms/asset-management-declaration", label: "Asset Management Declaration" },
+    { href: "/forms/telephone-lines-declaration", label: "Telephone Lines Declaration" },
+    { href: "/forms/declaration-of-product", label: "Declaration Of Product" },
 ];
 
 const registerLinks: DropdownLink[] = [
-    { href: "/agency/visit-details", label: "Agency Visit Details" },
-    { href: "/agency/manpower-register", label: "Agency Manpower Register" },
-    { href: "/agency/payment-register", label: "Payment Register" },
+    { href: "/forms/visit-details", label: "Agency Visit Details" },
+    { href: "/forms/manpower-register", label: "Agency Manpower Register" },
+    { href: "/forms/payment-register", label: "Payment Register" },
 ];
 
 const trackerLinks: DropdownLink[] = [
-    { href: "/agency/penalty-matrix", label: "Agency Penalty Matrix" },
-    { href: "/agency/training-tracker", label: "Agency Training Tracker" },
-    { href: "/agency/proactive-escalation-management-tracker", label: "Proactive Escalation Management Tracker" },
-    { href: "/agency/escalation-details", label: "Escalation Details" },
-    { href: "/agency/repo-kit-tracker", label: "Repo Kit Tracker" },
+    { href: "/forms/penalty-matrix", label: "Agency Penalty Matrix" },
+    { href: "/forms/training-tracker", label: "Agency Training Tracker" },
+    { href: "/forms/proactive-escalation-management-tracker", label: "Proactive Escalation Management Tracker" },
+    { href: "/forms/escalation-details", label: "Escalation Details" },
+    { href: "/forms/repo-kit-tracker", label: "Repo Kit Tracker" },
 ];
 
 
