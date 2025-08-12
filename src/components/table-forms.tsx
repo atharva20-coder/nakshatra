@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 
 // Generic props for the reusable table form
 interface TableFormProps<T> {
+  title: string;
   headers: { label: string; className?: string }[];
   rows: T[];
   renderCell: (row: T, key: keyof T, rowIndex: number, cellIndex: number) => React.ReactNode;
@@ -16,7 +17,8 @@ interface TableFormProps<T> {
   isPending: boolean;
 }
 
-export const TableForm = <T extends { id: number }>({
+export const TableForm = <T extends { id: number | string }>({
+  title,
   headers,
   rows,
   renderCell,
@@ -26,7 +28,15 @@ export const TableForm = <T extends { id: number }>({
   isPending,
 }: TableFormProps<T>) => {
   return (
-    <div>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+      <div className="text-center p-6 border-b border-gray-200 dark:border-gray-700">
+        <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
+          {title}
+        </h2>
+        <p className="text-lg text-gray-600 dark:text-gray-400">
+          Agency Visit Details
+        </p>
+      </div>
       <div className="overflow-x-auto">
         <table className="min-w-full table-fixed">
           <thead className="bg-rose-800">
@@ -69,14 +79,14 @@ export const TableForm = <T extends { id: number }>({
           onClick={onSave}
           disabled={isPending}
         >
-          Save
+          Save as Draft
         </Button>
         <Button
           className="bg-rose-800 hover:bg-rose-900 text-white"
           onClick={onSubmit}
           disabled={isPending}
         >
-          Submit
+          Submit for Approval
         </Button>
       </div>
     </div>

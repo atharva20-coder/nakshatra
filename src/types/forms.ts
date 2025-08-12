@@ -1,6 +1,6 @@
 // src/types/forms.ts
 export interface BaseFormRow {
-  id: number;
+  id: number | string; // Changed to allow string IDs from DB and number for new rows
 }
 
 // 1. Code of Conduct
@@ -210,7 +210,7 @@ export interface ApprovalRequestData {
 }
 
 // Form configuration
-export const FORM_CONFIGS: Record<string, FormMetadata> = {
+export const FORM_CONFIGS = {
   codeOfConduct: {
     id: 'codeOfConduct',
     title: 'Code of Conduct',
@@ -323,7 +323,9 @@ export const FORM_CONFIGS: Record<string, FormMetadata> = {
     isRequired: false,
     deadlineDay: 5
   }
-};
+} as const;
+
+export type FormType = keyof typeof FORM_CONFIGS;
 
 // Utility functions
 export const getFormDeadline = (month: number, year: number, deadlineDay: number): Date => {
