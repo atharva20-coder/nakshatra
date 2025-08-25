@@ -54,3 +54,44 @@ export async function saveCodeOfConductAction(
     return { error: "An unknown error occurred while saving the form." };
   }
 }
+
+export async function deleteCodeOfConductAction(id: string) {
+    const headersList = await headers();
+    const session = await auth.api.getSession({ headers: headersList });
+
+    if (!session) {
+        return { error: "Unauthorized: You must be logged in." };
+    }
+
+    try {
+        await prisma.codeOfConduct.delete({
+            where: {
+                id,
+                userId: session.user.id,
+            },
+        });
+        revalidatePath("/dashboard");
+        return { success: true };
+    } catch (err) {
+        console.error("Error deleting Code of Conduct:", err);
+        return { error: "An unknown error occurred while deleting the form." };
+    }
+}
+
+export async function getCodeOfConductById(id: string) {
+    const headersList = await headers();
+    const session = await auth.api.getSession({ headers: headersList });
+
+    if (!session) {
+        return null;
+    }
+
+    const submission = await prisma.codeOfConduct.findFirst({
+        where: {
+            id,
+            userId: session.user.id,
+        }
+    });
+
+    return submission;
+}

@@ -11,10 +11,12 @@ interface TableFormProps<T> {
   headers: { label: string; className?: string }[];
   rows: T[];
   renderCell: (row: T, key: keyof T, rowIndex: number, cellIndex: number) => React.ReactNode;
+  renderActions?: (row: T) => React.ReactNode;
   onAddRow: () => void;
   onSave: () => void;
   onSubmit: () => void;
   isPending: boolean;
+  isSubmitted?: boolean;
 }
 
 export const TableForm = <T extends { id: number | string }>({
@@ -22,10 +24,12 @@ export const TableForm = <T extends { id: number | string }>({
   headers,
   rows,
   renderCell,
+  renderActions,
   onAddRow,
   onSave,
   onSubmit,
   isPending,
+  isSubmitted
 }: TableFormProps<T>) => {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
@@ -64,27 +68,32 @@ export const TableForm = <T extends { id: number | string }>({
                       {renderCell(row, key as keyof T, rowIndex, cellIndex)}
                     </td>
                   ))}
+                {renderActions && (
+                    <td className="px-6 py-4 text-sm align-top text-right">
+                        {renderActions(row)}
+                    </td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       <div className="p-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex justify-end items-center gap-4">
-        <Button onClick={onAddRow} variant="outline" disabled={isPending}>
+        <Button onClick={onAddRow} variant="outline" disabled={isPending || isSubmitted}>
           <PlusCircle className="w-4 h-4 mr-2" />
           Add Row
         </Button>
         <Button
           variant="secondary"
           onClick={onSave}
-          disabled={isPending}
+          disabled={isPending || isSubmitted}
         >
           Save as Draft
         </Button>
         <Button
           className="bg-rose-800 hover:bg-rose-900 text-white"
           onClick={onSubmit}
-          disabled={isPending}
+          disabled={isPending || isSubmitted}
         >
           Submit for Approval
         </Button>
