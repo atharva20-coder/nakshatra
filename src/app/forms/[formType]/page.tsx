@@ -17,9 +17,9 @@ import { FORM_CONFIGS, FormType } from "@/types/forms";
 import { notFound } from "next/navigation";
 
 interface NewFormPageProps {
-    params: {
+    params: Promise<{
         formType: FormType;
-    }
+    }>;
 }
 
 const renderForm = (formType: FormType) => {
@@ -57,9 +57,8 @@ const renderForm = (formType: FormType) => {
     }
 }
 
-// The component is now async to correctly handle the params prop.
 export default async function NewFormPage({ params }: NewFormPageProps) {
-  const { formType } = params;
+  const { formType } = await params;
 
   if (!(formType in FORM_CONFIGS)) {
     notFound();

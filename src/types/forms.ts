@@ -188,28 +188,6 @@ export interface FormMetadata {
   deadlineDay: number; // Day of month (e.g., 5 for 5th)
 }
 
-// Form submission tracking
-export interface FormSubmissionStatus {
-  formType: string;
-  month: number;
-  year: number;
-  status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
-  submittedAt?: Date;
-  autoSubmitted: boolean;
-  canEdit: boolean;
-  needsApproval: boolean;
-}
-
-// Approval request interface
-export interface ApprovalRequestData {
-  formType: string;
-  formId: string;
-  requestType: 'UPDATE_SUBMITTED_FORM' | 'UPDATE_PREVIOUS_MONTH' | 'DELETE_RECORD';
-  reason: string;
-  documentFile?: File;
-}
-
-// Form configuration
 export const FORM_CONFIGS = {
   codeOfConduct: {
     id: 'codeOfConduct',

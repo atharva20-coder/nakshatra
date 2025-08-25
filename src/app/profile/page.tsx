@@ -46,7 +46,7 @@ export default async function Page() {
                 className="bg-rose-900 text-white hover:bg-rose-950 font-medium"
                 asChild
               >
-                <Link href="/admin/dashboard">Admin Dashboard</Link>
+                <Link href="/admin/dashboard">Admin Panel</Link>
               </Button>
             )}
             <SignOutButton />

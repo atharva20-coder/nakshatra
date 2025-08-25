@@ -8,10 +8,10 @@ import { FORM_CONFIGS } from "@/types/forms";
 type FormType = keyof typeof FORM_CONFIGS;
 
 interface EditFormPageProps {
-  params: {
+  params: Promise<{
     formType: FormType;
     id: string;
-  };
+  }>;
 }
 
 const renderForm = async (formType: FormType, id: string) => {
@@ -33,7 +33,7 @@ const renderForm = async (formType: FormType, id: string) => {
 }
 
 export default async function EditFormPage({ params }: EditFormPageProps) {
-  const { formType, id } = params;
+  const { formType, id } = await params;
 
   if (!(formType in FORM_CONFIGS)) {
     notFound();

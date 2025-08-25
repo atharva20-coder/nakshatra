@@ -64,12 +64,11 @@ export async function saveOrSubmitFormAction(
   }
 }
 
-// Define a more specific type for the submission objects
+// Define a more specific type for the submission summary to avoid 'any'.
 interface FormSubmissionSummary {
     id: string;
     status: SubmissionStatus;
     updatedAt: Date;
-    formType: string;
 }
 
 /**
@@ -95,6 +94,7 @@ export async function getFormSubmissionsAction() {
       select: { id: true, status: true, updatedAt: true },
     });
     
+    // Use the new specific type here.
     return submissions.map((s: FormSubmissionSummary) => ({ ...s, formType }));
   });
 
@@ -128,21 +128,40 @@ export async function getFormSubmissionByIdAction(formType: FormType, id: string
 }
 
 /**
- * Fetches all submitted forms for approval. Restricted to admins and auditors.
+ * UPDATED: Fetches all form submissions and all users for the admin page.
  */
-export async function getApprovalRequestsAction() {
-  const headersList = await headers();
-  const session = await auth.api.getSession({ headers: headersList });
+export async function getAllSubmissionsForAdmin() {
+    const headersList = await headers();
+    const session = await auth.api.getSession({ headers: headersList });
 
-  if (!session || (session.user.role !== UserRole.ADMIN && session.user.role !== UserRole.AUDITOR)) {
-    return { error: "Forbidden" };
-  }
+    if (!session || session.user.role !== UserRole.ADMIN) {
+        return { error: "Forbidden", submissions: null, users: null };
+    }
 
-  const requests = await prisma.approvalRequest.findMany({
-    where: { status: 'PENDING' },
-    include: { user: { select: { name: true } } },
-    orderBy: { createdAt: 'desc' },
-  });
+    const allSubmissions = [];
 
-  return { requests };
+    for (const formType of Object.keys(FORM_CONFIGS) as FormType[]) {
+        const modelName = FORM_CONFIGS[formType].id as keyof typeof prisma;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const prismaModel = (prisma as any)[modelName];
+        if (!prismaModel) continue;
+
+        const userRelationField = formType === 'agencyVisits' ? 'agency' : 'user';
+
+        const submissions = await prismaModel.findMany({
+            include: { [userRelationField]: { select: { id: true, name: true } } },
+        });
+
+        for (const sub of submissions) {
+            allSubmissions.push({
+                ...sub,
+                formType,
+                user: sub[userRelationField],
+            });
+        }
+    }
+    
+    const users = await prisma.user.findMany({ select: { id: true, name: true } });
+
+    return { submissions: allSubmissions, users, error: null };
 }
