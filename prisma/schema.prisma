@@ -64,15 +64,14 @@ model MonthlySubmission {
   id            String           @id @default(uuid())
   userId        String
   user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  month         Int              // 1-12
-  year          Int
+
   submittedAt   DateTime?
   autoSubmitted Boolean          @default(false)
   status        SubmissionStatus @default(DRAFT)
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
-  @@unique([userId, month, year])
+  @@unique([userId])
   @@map("monthly_submissions")
 }
 
