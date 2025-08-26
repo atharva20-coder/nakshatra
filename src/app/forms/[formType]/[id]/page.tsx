@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/agency-page-header";
 import { AgencyVisitForm } from "@/components/forms/AgencyVisitForm";
+import { CodeOfConductForm } from "@/components/forms/CodeOfConductForm";
 import { getAgencyVisitById } from "@/actions/agency-visit.action";
+import { getCodeOfConductById } from "@/actions/code-of-conduct.action";
 import { FORM_CONFIGS } from "@/types/forms";
 
 // Deriving FormType directly from the keys of the imported FORM_CONFIGS object.
@@ -21,11 +23,16 @@ const renderForm = async (formType: FormType, id: string) => {
             if (!submission) notFound();
             return <AgencyVisitForm initialData={submission} />;
         }
-        // Add cases for other forms here
-        // case 'codeOfConduct': {
-        //     const submission = await getCodeOfConductById(id);
+        case 'codeOfConduct': {
+            const submission = await getCodeOfConductById(id);
+            if (!submission) notFound();
+            return <CodeOfConductForm initialData={submission} />;
+        }
+        // Add cases for other forms here as they are implemented
+        // case 'declarationCumUndertaking': {
+        //     const submission = await getDeclarationCumUndertakingById(id);
         //     if (!submission) notFound();
-        //     return <CodeOfConductForm initialData={submission} />;
+        //     return <DeclarationCumUndertakingForm initialData={submission} />;
         // }
         default:
             notFound();

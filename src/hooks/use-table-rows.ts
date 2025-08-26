@@ -6,13 +6,14 @@ export const useTableRows = <T extends { id: number | string }>(
   initialRows: T[],
   rowFactory: (id: number) => T
 ) => {
-  // Initialize state only once with the initialRows from the first render
-  // by passing a function to useState. This prevents the state from being
-  // reset on subsequent re-renders of the parent component.
   const [rows, setRows] = useState<T[]>(() => initialRows);
 
   const addRow = () => {
     setRows((prevRows) => [...prevRows, rowFactory(prevRows.length + 1)]);
+  };
+
+  const removeRow = (id: number | string) => {
+    setRows((prevRows) => prevRows.filter((row) => row.id !== id));
   };
 
   const handleInputChange = (
@@ -39,5 +40,5 @@ export const useTableRows = <T extends { id: number | string }>(
     );
   };
 
-  return { rows, setRows, addRow, handleInputChange, updateRowValue };
+  return { rows, setRows, addRow, removeRow, handleInputChange, updateRowValue };
 };

@@ -78,18 +78,26 @@ model MonthlySubmission {
 
 // 1. Code of Conduct
 model CodeOfConduct {
-  id                String           @id @default(uuid())
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  id                String                @id @default(uuid())
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
   userId            String
-  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  status            SubmissionStatus @default(DRAFT)
+  user              User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status            SubmissionStatus      @default(DRAFT)
+  details           CodeOfConductDetail[]
   
+  @@map("code_of_conduct")
+}
+
+model CodeOfConductDetail {
+  id                String           @id @default(uuid())
   name              String           // Proprietor/Partner/Director
   signature         String
   date              DateTime
+  conductId         String
+  conduct           CodeOfConduct    @relation(fields: [conductId], references: [id], onDelete: Cascade)
   
-  @@map("code_of_conduct")
+  @@map("code_of_conduct_details")
 }
 
 // 2. Declaration Cum Undertaking

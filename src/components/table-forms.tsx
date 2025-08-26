@@ -1,94 +1,133 @@
-"use client";
+import React from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Plus, Save, Send, Loader2 } from 'lucide-react';
 
-import React from "react";
-import { Button } from "@/components/ui/button";
-import { PlusCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
-
-// Generic props for the reusable table form
-interface TableFormProps<T> {
-  title: string;
-  headers: { label: string; className?: string }[];
+interface TableFormProps<T extends { id: string | number }> {
+  headers: { label: string; required?: boolean }[];
   rows: T[];
-  renderCell: (row: T, key: keyof T, rowIndex: number, cellIndex: number) => React.ReactNode;
-  onAddRow: () => void;
-  onSave: () => void;
-  onSubmit: () => void;
-  isPending: boolean;
+  renderCell: (row: T, key: keyof T) => React.ReactNode;
+  onAddRow?: () => void;
+  onSave?: () => void;
+  onSubmit?: () => void;
+  isPending?: boolean;
+  showActions?: boolean;
 }
 
-export const TableForm = <T extends { id: number | string }>({
-  title,
+export function TableForm<T extends { id: string | number }>({
+
   headers,
   rows,
   renderCell,
   onAddRow,
   onSave,
   onSubmit,
-  isPending,
-}: TableFormProps<T>) => {
+  isPending = false,
+  showActions = true,
+}: TableFormProps<T>) {
+  const canAddRow = showActions && onAddRow && !isPending;
+  const canSave = showActions && onSave && !isPending;
+  const canSubmit = showActions && onSubmit && !isPending;
+
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-      <div className="text-center p-6 border-b border-gray-200 dark:border-gray-700">
-        <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
-          {title}
-        </h2>
-        <p className="text-lg text-gray-600 dark:text-gray-400">
-          Agency Visit Details
-        </p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full table-fixed">
-          <thead className="bg-rose-800">
-            <tr>
-              {headers.map((header) => (
-                <th
-                  key={header.label}
-                  className={cn(
-                    "px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider",
-                    header.className
-                  )}
-                >
-                  {header.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {rows.map((row, rowIndex) => (
-              <tr key={row.id}>
-                {Object.keys(row)
-                  .filter((key) => key !== "id")
-                  .map((key, cellIndex) => (
-                    <td key={key} className="px-6 py-4 text-sm align-top">
-                      {renderCell(row, key as keyof T, rowIndex, cellIndex)}
-                    </td>
+    <Card className="w-full">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          {canAddRow && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onAddRow}
+              disabled={isPending}
+              className="flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add Row
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+      
+      <CardContent>
+        <div className="space-y-6">
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  {headers.map((header, index) => (
+                    <th
+                      key={index}
+                      className="text-left p-3 font-semibold text-sm"
+                    >
+                      {header.label}
+                      {header.required && <span className="text-red-500 ml-1">*</span>}
+                    </th>
                   ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="p-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex justify-end items-center gap-4">
-        <Button onClick={onAddRow} variant="outline" disabled={isPending}>
-          <PlusCircle className="w-4 h-4 mr-2" />
-          Add Row
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={onSave}
-          disabled={isPending}
-        >
-          Save as Draft
-        </Button>
-        <Button
-          className="bg-rose-800 hover:bg-rose-900 text-white"
-          onClick={onSubmit}
-          disabled={isPending}
-        >
-          Submit for Approval
-        </Button>
-      </div>
-    </div>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, rowIndex) => (
+                  <tr key={row.id} className="border-b hover:bg-muted/25">
+                    {Object.keys(row)
+                      .filter(key => key !== 'id')
+                      .map((key, cellIndex) => (
+                        <td key={cellIndex} className="p-3">
+                          {renderCell(row, key as keyof T)}
+                        </td>
+                      ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Actions */}
+          {showActions && (canSave || canSubmit) && (
+            <div className="flex items-center justify-end gap-4 pt-4 border-t">
+              {canSave && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onSave}
+                  disabled={isPending}
+                  className="flex items-center gap-2"
+                >
+                  {isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Save as Draft
+                </Button>
+              )}
+              
+              {canSubmit && (
+                <Button
+                  type="button"
+                  onClick={onSubmit}
+                  disabled={isPending}
+                  className="flex items-center gap-2"
+                >
+                  {isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  Submit
+                </Button>
+              )}
+            </div>
+          )}
+
+          {!showActions && (
+            <div className="text-center py-4 text-muted-foreground">
+              <p className="text-sm">This form has been submitted and is read-only.</p>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
-};
+}
