@@ -102,7 +102,6 @@ export const AgencyVisitForm = ({ initialData }: AgencyVisitFormProps) => {
 
   return (
     <TableForm
-      title={metadata.title}
       headers={headers}
       rows={rows}
       renderCell={(row, key) => renderCell(row as AgencyTableRow, key as keyof AgencyTableRow)}

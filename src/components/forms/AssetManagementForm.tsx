@@ -66,7 +66,6 @@ export const AssetManagementForm = ({ initialData }: AssetManagementFormProps) =
 
   return (
     <TableForm
-      title={metadata.title}
       headers={headers}
       rows={rows}
       renderCell={(row, key) => renderCell(row, key as keyof AssetManagementRow)}

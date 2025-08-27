@@ -39,25 +39,40 @@ export async function saveCodeOfConductAction(
       return { error: "Please fill in all required fields for each row." };
     }
 
+    // Check for existing form
+    let existingForm = null;
+    
     if (formId) {
-      // Check if user owns this form
-      const existingForm = await prisma.codeOfConduct.findFirst({
-        where: { id: formId, userId: userId },
+      // If formId is provided, find that specific form for this user
+      existingForm = await prisma.codeOfConduct.findFirst({
+        where: { 
+          id: formId,
+          userId: userId
+        },
         include: { details: true }
       });
-      
-      if (!existingForm) {
-        return { error: "Forbidden: You do not have permission to edit this form." };
-      }
+    } else {
+      // If no formId, check for any draft form for this user
+      existingForm = await prisma.codeOfConduct.findFirst({
+        where: { 
+          userId: userId,
+          status: SubmissionStatus.DRAFT
+        },
+        include: { details: true }
+      });
+    }
 
+    let savedForm;
+
+    if (existingForm) {
       // Don't allow editing if already submitted
       if (existingForm.status === SubmissionStatus.SUBMITTED) {
         return { error: "Cannot edit a submitted form." };
       }
 
-      // Update form with new rows
-      await prisma.codeOfConduct.update({
-        where: { id: formId },
+      // Update existing form
+      savedForm = await prisma.codeOfConduct.update({
+        where: { id: existingForm.id },
         data: {
           status: submissionStatus,
           details: {
@@ -68,11 +83,12 @@ export async function saveCodeOfConductAction(
               date: new Date(row.date)
             }))
           }
-        }
+        },
+        include: { details: true }
       });
     } else {
-      // Create new form with rows
-      await prisma.codeOfConduct.create({
+      // Create new form
+      savedForm = await prisma.codeOfConduct.create({
         data: {
           userId,
           status: submissionStatus,
@@ -83,14 +99,20 @@ export async function saveCodeOfConductAction(
               date: new Date(row.date)
             }))
           }
-        }
+        },
+        include: { details: true }
       });
     }
 
+    // Revalidate all relevant paths
     revalidatePath("/dashboard");
-    if (formId) revalidatePath(`/forms/codeOfConduct/${formId}`);
+    revalidatePath("/forms/codeOfConduct");
+    revalidatePath(`/forms/codeOfConduct/${savedForm.id}`);
     
-    return { success: true };
+    return { 
+      success: true,
+      formId: savedForm.id
+    };
   } catch (err) {
     console.error("Error saving Code of Conduct:", err);
     return { error: "An unknown error occurred while saving the form." };
@@ -163,6 +185,7 @@ export async function deleteCodeOfConductAction(id: string) {
     });
 
     revalidatePath("/dashboard");
+    revalidatePath("/forms/codeOfConduct");
     return { success: true };
   } catch (error) {
     console.error("Error deleting Code of Conduct:", error);

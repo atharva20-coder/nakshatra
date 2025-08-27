@@ -35,6 +35,7 @@ export const CodeOfConductForm = ({ initialData }: CodeOfConductFormProps) => {
   const [isPending, setIsPending] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const metadata = FORM_CONFIGS.codeOfConduct;
 
   const { rows, addRow, removeRow, handleInputChange } = useTableRows<CodeOfConductRow>(
@@ -42,12 +43,17 @@ export const CodeOfConductForm = ({ initialData }: CodeOfConductFormProps) => {
     createNewRow
   );
 
-  // Set submitted state based on initial data
+  // Set initial states based on data
   useEffect(() => {
-    if (initialData?.status === 'SUBMITTED') {
-      setIsSubmitted(true);
+    if (initialData) {
+      if (initialData.status === 'SUBMITTED') {
+        setIsSubmitted(true);
+      }
+      setIsLoading(false);
+    } else {
+      setIsLoading(false);
     }
-  }, [initialData?.status]);
+  }, [initialData]);
 
   const handleDelete = async () => {
     if (!initialData?.id || isSubmitted) return;
@@ -111,6 +117,9 @@ export const CodeOfConductForm = ({ initialData }: CodeOfConductFormProps) => {
         if (status === "SUBMITTED") {
           setIsSubmitted(true);
           router.push("/dashboard");
+        } else if (result.formId) {
+          // Always redirect to the form's specific page after saving
+          router.push(`/forms/codeOfConduct/${result.formId}`);
         }
         
         router.refresh();
@@ -131,7 +140,7 @@ export const CodeOfConductForm = ({ initialData }: CodeOfConductFormProps) => {
   ];
 
   const renderCell = (row: CodeOfConductRow, key: keyof CodeOfConductRow | 'actions') => {
-    const isDisabled = isPending || isSubmitted;
+    const isDisabled = isPending || (initialData?.status === 'SUBMITTED');
     
     if (key === 'actions') {
       return (
@@ -139,7 +148,7 @@ export const CodeOfConductForm = ({ initialData }: CodeOfConductFormProps) => {
           variant="ghost"
           size="icon"
           onClick={() => removeRow(row.id)}
-          disabled={isDisabled || rows.length <= 1}
+          disabled={isDisabled || rows.length <= 1 || initialData?.status === 'SUBMITTED'}
           className={cn("hover:text-red-500", {
             "opacity-50 cursor-not-allowed": isDisabled || rows.length <= 1
           })}
@@ -168,6 +177,14 @@ export const CodeOfConductForm = ({ initialData }: CodeOfConductFormProps) => {
     );
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {isSubmitted && (
@@ -194,6 +211,7 @@ export const CodeOfConductForm = ({ initialData }: CodeOfConductFormProps) => {
       <p className="text-gray-600">{metadata.description}</p>
       
       <TableForm
+
         headers={headers}
         rows={rows}
         renderCell={(row, key) => renderCell(row as CodeOfConductRow, key as keyof CodeOfConductRow | 'actions')}
