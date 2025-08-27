@@ -64,7 +64,6 @@ export const RepoKitTrackerForm = ({ initialData }: RepoKitTrackerFormProps) => 
 
   return (
     <TableForm
-      title={metadata.title}
       headers={headers}
       rows={rows}
       renderCell={(row, key) => renderCell(row, key as keyof RepoKitTrackerRow)}

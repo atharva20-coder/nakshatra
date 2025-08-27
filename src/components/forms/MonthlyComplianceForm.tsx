@@ -68,7 +68,6 @@ export const MonthlyComplianceForm = ({ initialData }: MonthlyComplianceFormProp
 
   return (
     <TableForm
-      title={metadata.title}
       headers={headers}
       rows={rows}
       renderCell={(row, key) => renderCell(row, key as keyof MonthlyComplianceRow)}
