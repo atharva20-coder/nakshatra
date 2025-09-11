@@ -1,91 +1,428 @@
-import { headers } from "next/headers";
-import Link from "next/link";
-import { redirect } from "next/navigation";
+import React from "react";
 import { auth } from "@/lib/auth";
-import { getFormSubmissionsAction } from "@/actions/form-management.action";
+import { headers } from "next/headers";
+import { prisma } from "@/lib/prisma";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PlusCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { CheckCircle, Clock, FileText, AlertCircle, Plus, Edit } from "lucide-react";
 import { FORM_CONFIGS, FormType } from "@/types/forms";
-import { PageHeader } from "@/components/agency-page-header";
-import { UserRole } from "@/generated/prisma";
+import { SubmissionStatus } from "@/generated/prisma";
+import Link from "next/link";
 
-export default async function DashboardPage() {
+// Define form table mappings
+const FORM_TABLE_MAPPINGS = {
+  codeOfConduct: 'codeOfConduct',
+  declarationCumUndertaking: 'declarationCumUndertaking',
+  agencyVisits: 'agencyVisit',
+  monthlyCompliance: 'monthlyCompliance',
+  assetManagement: 'assetManagement',
+  telephoneDeclaration: 'telephoneDeclaration',
+  manpowerRegister: 'agencyManpowerRegister',
+  productDeclaration: 'productDeclaration',
+  penaltyMatrix: 'agencyPenaltyMatrix',
+  trainingTracker: 'agencyTrainingTracker',
+  proactiveEscalation: 'proactiveEscalationTracker',
+  escalationDetails: 'escalationDetails',
+  paymentRegister: 'paymentRegister',
+  repoKitTracker: 'repoKitTracker'
+} as const;
+
+interface FormStatus {
+  formType: FormType;
+  status: 'NOT_STARTED' | 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+  formId?: string;
+  lastUpdated?: Date;
+  isOverdue?: boolean;
+}
+
+async function getUserFormStatuses(userId: string): Promise<FormStatus[]> {
+  const currentMonth = new Date().getMonth() + 1;
+  const currentYear = new Date().getFullYear();
+
+  const statuses: FormStatus[] = [];
+
+  for (const [formType, config] of Object.entries(FORM_CONFIGS)) {
+    try {
+      const tableName = FORM_TABLE_MAPPINGS[formType as FormType];
+      let form = null;
+
+      // Query the appropriate table based on form type
+      switch (formType as FormType) {
+        case 'codeOfConduct':
+          form = await prisma.codeOfConduct.findFirst({
+            where: { userId },
+            orderBy: { updatedAt: 'desc' }
+          });
+          break;
+        case 'agencyVisits':
+          form = await prisma.agencyVisit.findFirst({
+            where: { agencyId: userId },
+            orderBy: { updatedAt: 'desc' }
+          });
+          break;
+        case 'declarationCumUndertaking':
+          form = await prisma.declarationCumUndertaking.findFirst({
+            where: { userId },
+            orderBy: { updatedAt: 'desc' }
+          });
+          break;
+        case 'monthlyCompliance':
+          form = await prisma.monthlyCompliance.findFirst({
+            where: { userId },
+            orderBy: { updatedAt: 'desc' }
+          });
+          break;
+        case 'assetManagement':
+          form = await prisma.assetManagement.findFirst({
+            where: { userId },
+            orderBy: { updatedAt: 'desc' }
+          });
+          break;
+        case 'telephoneDeclaration':
+          form = await prisma.telephoneDeclaration.findFirst({
+            where: { userId },
+            orderBy: { updatedAt: 'desc' }
+          });
+          break;
+        case 'manpowerRegister':
+          form = await prisma.agencyManpowerRegister.findFirst({
+            where: { userId },
+            orderBy: { updatedAt: 'desc' }
+          });
+          break;
+        case 'productDeclaration':
+          form = await prisma.productDeclaration.findFirst({
+            where: { userId },
+            orderBy: { updatedAt: 'desc' }
+          });
+          break;
+        case 'penaltyMatrix':
+          form = await prisma.agencyPenaltyMatrix.findFirst({
+            where: { userId },
+            orderBy: { updatedAt: 'desc' }
+          });
+          break;
+        case 'trainingTracker':
+          form = await prisma.agencyTrainingTracker.findFirst({
+            where: { userId },
+            orderBy: { updatedAt: 'desc' }
+          });
+          break;
+        case 'proactiveEscalation':
+          form = await prisma.proactiveEscalationTracker.findFirst({
+            where: { userId },
+            orderBy: { updatedAt: 'desc' }
+          });
+          break;
+        case 'escalationDetails':
+          form = await prisma.escalationDetails.findFirst({
+            where: { userId },
+            orderBy: { updatedAt: 'desc' }
+          });
+          break;
+        case 'paymentRegister':
+          form = await prisma.paymentRegister.findFirst({
+            where: { userId },
+            orderBy: { updatedAt: 'desc' }
+          });
+          break;
+        case 'repoKitTracker':
+          form = await prisma.repoKitTracker.findFirst({
+            where: { userId },
+            orderBy: { updatedAt: 'desc' }
+          });
+          break;
+      }
+
+      // Determine if form is overdue
+      const deadline = new Date(currentYear, currentMonth - 1, config.deadlineDay, 23, 59, 59);
+      const isOverdue = new Date() > deadline && (!form || form.status === SubmissionStatus.DRAFT);
+
+      statuses.push({
+        formType: formType as FormType,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        status: form ? form.status as any : 'NOT_STARTED',
+        formId: form?.id,
+        lastUpdated: form?.updatedAt,
+        isOverdue: isOverdue && config.isRequired
+      });
+    } catch (error) {
+      console.error(`Error fetching status for ${formType}:`, error);
+      statuses.push({
+        formType: formType as FormType,
+        status: 'NOT_STARTED',
+        isOverdue: config.isRequired
+      });
+    }
+  }
+
+  return statuses;
+}
+
+function getStatusIcon(status: FormStatus['status']) {
+  switch (status) {
+    case 'SUBMITTED':
+    case 'APPROVED':
+      return <CheckCircle className="h-4 w-4 text-green-500" />;
+    case 'DRAFT':
+      return <Clock className="h-4 w-4 text-yellow-500" />;
+    case 'REJECTED':
+      return <AlertCircle className="h-4 w-4 text-red-500" />;
+    default:
+      return <FileText className="h-4 w-4 text-gray-500" />;
+  }
+}
+
+function getStatusBadge(status: FormStatus['status'], isOverdue?: boolean) {
+  if (isOverdue && (status === 'NOT_STARTED' || status === 'DRAFT')) {
+    return <Badge variant="destructive">Overdue</Badge>;
+  }
+
+  switch (status) {
+    case 'SUBMITTED':
+      return <Badge variant="default" className="bg-blue-100 text-blue-800">Submitted</Badge>;
+    case 'APPROVED':
+      return <Badge variant="default" className="bg-green-100 text-green-800">Approved</Badge>;
+    case 'DRAFT':
+      return <Badge variant="default" className="bg-yellow-100 text-yellow-800">Draft</Badge>;
+    case 'REJECTED':
+      return <Badge variant="destructive">Rejected</Badge>;
+    default:
+      return <Badge variant="outline">Not Started</Badge>;
+  }
+}
+
+interface FormCardProps {
+  formStatus: FormStatus;
+}
+
+function FormCard({ formStatus }: FormCardProps) {
+  const config = FORM_CONFIGS[formStatus.formType];
+  const hasExistingForm = formStatus.formId && (formStatus.status === 'DRAFT' || formStatus.status === 'SUBMITTED');
+  
+  return (
+    <Card className={`transition-all duration-200 hover:shadow-md ${
+      formStatus.isOverdue ? 'border-red-200 bg-red-50' : ''
+    }`}>
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <div className="space-y-1">
+            <CardTitle className="text-lg font-semibold">
+              {config.title}
+            </CardTitle>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {config.description}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {getStatusIcon(formStatus.status)}
+            {getStatusBadge(formStatus.status, formStatus.isOverdue)}
+          </div>
+        </div>
+      </CardHeader>
+      
+      <CardContent>
+        <div className="space-y-3">
+          {formStatus.lastUpdated && (
+            <p className="text-xs text-gray-500">
+              Last updated: {formStatus.lastUpdated.toLocaleDateString()}
+            </p>
+          )}
+          
+          <div className="flex gap-2">
+            {hasExistingForm ? (
+              <>
+                <Button asChild size="sm" className="flex-1">
+                  <Link href={`/forms/${formStatus.formType}/${formStatus.formId}`}>
+                    <Edit className="h-4 w-4 mr-2" />
+                    {formStatus.status === 'DRAFT' ? 'Continue Editing' : 'View Form'}
+                  </Link>
+                </Button>
+                {formStatus.status === 'DRAFT' && (
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={`/forms/${formStatus.formType}`}>
+                      <Plus className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                )}
+              </>
+            ) : (
+              <Button asChild size="sm" className="flex-1">
+                <Link href={`/forms/${formStatus.formType}`}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create New
+                </Link>
+              </Button>
+            )}
+          </div>
+          
+          {config.isRequired && (
+            <p className="text-xs text-gray-500">
+              Required • Due by {config.deadlineDay}th of each month
+            </p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default async function Dashboard() {
   const headersList = await headers();
   const session = await auth.api.getSession({ headers: headersList });
 
   if (!session) {
-    redirect("/auth/login");
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+            Access Denied
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            Please log in to access the dashboard.
+          </p>
+        </div>
+      </div>
+    );
   }
 
-  const { submissions, error } = await getFormSubmissionsAction();
-
-  if (error || !submissions) {
-    return <div>Error loading submissions. Please try again.</div>;
-  }
-
-  const isAgencyUser = session.user.role === UserRole.USER || session.user.role === UserRole.COLLECTION_MANAGER;
+  const formStatuses = await getUserFormStatuses(session.user.id);
+  
+  // Categorize forms
+  const requiredForms = formStatuses.filter(f => FORM_CONFIGS[f.formType].isRequired);
+  const optionalForms = formStatuses.filter(f => !FORM_CONFIGS[f.formType].isRequired);
+  
+  // Count statistics
+  const totalRequired = requiredForms.length;
+  const completedRequired = requiredForms.filter(f => f.status === 'SUBMITTED' || f.status === 'APPROVED').length;
+  const overdueRequired = requiredForms.filter(f => f.isOverdue).length;
+  const draftsCount = formStatuses.filter(f => f.status === 'DRAFT').length;
 
   return (
-    <div>
-      {isAgencyUser && (
-        <PageHeader returnHref="/profile" returnLabel="Back to Profile" />
-      )}
-      <div className="container mx-auto max-w-5xl px-6 py-12 space-y-10">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-4xl font-bold text-neutral-800">My Dashboard</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              View and manage your form submissions.
-            </p>
-          </div>
-          <Button asChild>
-            {/* This link now correctly points to the agency visits form creation page */}
-            <Link href="/forms/agencyVisits">
-              <PlusCircle className="w-4 h-4 mr-2" />
-              New Agency Visit
-            </Link>
-          </Button>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="container mx-auto px-6 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+            Welcome back, {session.user.name}
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            Manage your form submissions and track compliance status
+          </p>
         </div>
 
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <table className="min-w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Form ID</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Updated</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {submissions.map((form) => (
-                <tr key={form.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">{form.id.slice(0, 8)}...</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {/* Use the title from FORM_CONFIGS for a user-friendly name */}
-                    {FORM_CONFIGS[form.formType as FormType]?.title || form.formType}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${form.status === 'DRAFT' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
-                      {form.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(form.updatedAt).toLocaleString()}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    {/* This link is now fully dynamic based on the formType */}
-                    <Link href={`/forms/${form.formType}/${form.id}`} className="text-rose-600 hover:text-rose-900">
-                      View / Edit
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {submissions.length === 0 && (
-            <p className="text-center text-gray-500 py-8">You have no submissions yet.</p>
-          )}
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Required Forms
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    {completedRequired}/{totalRequired}
+                  </p>
+                </div>
+                <CheckCircle className="h-8 w-8 text-green-500" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Overdue
+                  </p>
+                  <p className="text-2xl font-bold text-red-600">
+                    {overdueRequired}
+                  </p>
+                </div>
+                <AlertCircle className="h-8 w-8 text-red-500" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Draft Forms
+                  </p>
+                  <p className="text-2xl font-bold text-yellow-600">
+                    {draftsCount}
+                  </p>
+                </div>
+                <Clock className="h-8 w-8 text-yellow-500" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Total Forms
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    {formStatuses.length}
+                  </p>
+                </div>
+                <FileText className="h-8 w-8 text-blue-500" />
+              </div>
+            </CardContent>
+          </Card>
         </div>
+
+        {/* Overdue Forms Alert */}
+        {overdueRequired > 0 && (
+          <Card className="border-red-200 bg-red-50 mb-8">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="h-6 w-6 text-red-500 flex-shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-red-800 mb-1">
+                    Attention: {overdueRequired} Overdue Form{overdueRequired > 1 ? 's' : ''}
+                  </h3>
+                  <p className="text-red-700 text-sm">
+                    Please complete your overdue submissions as soon as possible to maintain compliance.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Required Forms Section */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-6">
+            Required Forms
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {requiredForms.map((formStatus) => (
+              <FormCard key={formStatus.formType} formStatus={formStatus} />
+            ))}
+          </div>
+        </div>
+
+        {/* Optional Forms Section */}
+        {optionalForms.length > 0 && (
+          <div>
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-6">
+              Optional Forms
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {optionalForms.map((formStatus) => (
+                <FormCard key={formStatus.formType} formStatus={formStatus} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
