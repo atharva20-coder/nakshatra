@@ -7,7 +7,6 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { AgencyTableRow } from "@/types/forms";
 
-// Input type for multiple rows
 type AgencyVisitInput = Omit<AgencyTableRow, 'id'>[];
 
 export async function saveAgencyVisitAction(
@@ -30,33 +29,30 @@ export async function saveAgencyVisitAction(
       return { error: "At least one row is required." };
     }
 
-    // Validate all rows
-    const invalidRow = rows.find(row => 
-      !row.employeeId.trim() || !row.employeeName.trim() || !row.dateOfVisit.trim()
-    );
-    
-    if (invalidRow) {
-      return { error: "Please fill in all required fields for each row." };
-    }
+    // Sanitize the input to only include fields expected by the VisitDetail model
+    const detailsToCreate = rows.map(row => ({
+      srNo: row.srNo,
+      dateOfVisit: row.dateOfVisit,
+      employeeId: row.employeeId,
+      employeeName: row.employeeName,
+      mobileNo: row.mobileNo,
+      branchLocation: row.branchLocation,
+      product: row.product,
+      bucketDpd: row.bucketDpd,
+      timeIn: row.timeIn,
+      timeOut: row.timeOut,
+      signature: row.signature,
+      purposeOfVisit: row.purposeOfVisit,
+    }));
 
-    // Check for existing form
     let existingForm = null;
-    
     if (formId) {
       existingForm = await prisma.agencyVisit.findFirst({
-        where: { 
-          id: formId,
-          agencyId: userId
-        },
-        include: { details: true }
+        where: { id: formId, agencyId: userId },
       });
     } else {
       existingForm = await prisma.agencyVisit.findFirst({
-        where: { 
-          agencyId: userId,
-          status: SubmissionStatus.DRAFT
-        },
-        include: { details: true }
+        where: { agencyId: userId, status: SubmissionStatus.DRAFT },
       });
     }
 
@@ -73,23 +69,9 @@ export async function saveAgencyVisitAction(
           status: submissionStatus,
           details: {
             deleteMany: {},
-            create: rows.map(row => ({
-              srNo: row.srNo,
-              dateOfVisit: row.dateOfVisit,
-              employeeId: row.employeeId.trim(),
-              employeeName: row.employeeName.trim(),
-              mobileNo: row.mobileNo,
-              branchLocation: row.branchLocation,
-              product: row.product,
-              bucketDpd: row.bucketDpd,
-              timeIn: row.timeIn,
-              timeOut: row.timeOut,
-              signature: row.signature,
-              purposeOfVisit: row.purposeOfVisit
-            }))
+            create: detailsToCreate, // Use sanitized data
           }
         },
-        include: { details: true }
       });
     } else {
       savedForm = await prisma.agencyVisit.create({
@@ -97,34 +79,19 @@ export async function saveAgencyVisitAction(
           agencyId: userId,
           status: submissionStatus,
           details: {
-            create: rows.map(row => ({
-              srNo: row.srNo,
-              dateOfVisit: row.dateOfVisit,
-              employeeId: row.employeeId.trim(),
-              employeeName: row.employeeName.trim(),
-              mobileNo: row.mobileNo,
-              branchLocation: row.branchLocation,
-              product: row.product,
-              bucketDpd: row.bucketDpd,
-              timeIn: row.timeIn,
-              timeOut: row.timeOut,
-              signature: row.signature,
-              purposeOfVisit: row.purposeOfVisit
-            }))
+            create: detailsToCreate, // Use sanitized data
           }
         },
-        include: { details: true }
       });
     }
 
     revalidatePath("/dashboard");
-    revalidatePath("/forms/agencyVisits");
-    revalidatePath(`/forms/agencyVisits/${savedForm.id}`);
+    revalidatePath(`/forms/agency-visits`);
+    revalidatePath(`/forms/agency-visits/${savedForm.id}`);
     
     return { 
       success: true,
-      formId: savedForm.id,
-      status: savedForm.status
+      formId: savedForm.id
     };
   } catch (err) {
     console.error("Error saving Agency Visit:", err);
@@ -159,91 +126,11 @@ export async function getAgencyVisitById(id: string) {
       id: form.id,
       status: form.status,
       details: form.details.map(detail => ({
-        id: detail.id,
-        srNo: detail.srNo,
-        dateOfVisit: detail.dateOfVisit,
-        employeeId: detail.employeeId,
-        employeeName: detail.employeeName,
-        mobileNo: detail.mobileNo,
-        branchLocation: detail.branchLocation,
-        product: detail.product,
-        bucketDpd: detail.bucketDpd,
-        timeIn: detail.timeIn,
-        timeOut: detail.timeOut,
-        signature: detail.signature,
-        purposeOfVisit: detail.purposeOfVisit
+        ...detail,
       }))
     };
   } catch (error) {
     console.error("Error fetching Agency Visit:", error);
-    return null;
-  }
-}
-
-export async function getUserAgencyVisitForm() {
-  const headersList = await headers();
-  const session = await auth.api.getSession({ headers: headersList });
-  
-  if (!session) {
-    return null;
-  }
-
-  try {
-    // First check for any draft
-    let form = await prisma.agencyVisit.findFirst({
-      where: { 
-        agencyId: session.user.id,
-        status: SubmissionStatus.DRAFT
-      },
-      include: {
-        details: true
-      },
-      orderBy: {
-        updatedAt: 'desc'
-      }
-    });
-
-    // If no draft, get the most recent submitted form
-    if (!form) {
-      form = await prisma.agencyVisit.findFirst({
-        where: { 
-          agencyId: session.user.id,
-          status: SubmissionStatus.SUBMITTED
-        },
-        include: {
-          details: true
-        },
-        orderBy: {
-          updatedAt: 'desc'
-        }
-      });
-    }
-
-    if (!form) {
-      return null;
-    }
-
-    return {
-      id: form.id,
-      status: form.status,
-      details: form.details.map(detail => ({
-        id: detail.id,
-        srNo: detail.srNo,
-        dateOfVisit: detail.dateOfVisit,
-        employeeId: detail.employeeId,
-        employeeName: detail.employeeName,
-        mobileNo: detail.mobileNo,
-        branchLocation: detail.branchLocation,
-        product: detail.product,
-        bucketDpd: detail.bucketDpd,
-        timeIn: detail.timeIn,
-        timeOut: detail.timeOut,
-        signature: detail.signature,
-        purposeOfVisit: detail.purposeOfVisit
-      }))
-    };
-  } catch (error) {
-    console.error("Error fetching user's Agency Visit form:", error);
     return null;
   }
 }
@@ -274,10 +161,11 @@ export async function deleteAgencyVisitAction(id: string) {
     });
 
     revalidatePath("/dashboard");
-    revalidatePath("/forms/agencyVisits");
+    revalidatePath("/forms/agency-visits");
     return { success: true };
   } catch (error) {
     console.error("Error deleting Agency Visit:", error);
     return { error: "An unknown error occurred while deleting the form." };
   }
 }
+

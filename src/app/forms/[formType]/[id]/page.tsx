@@ -4,6 +4,8 @@ import { AgencyVisitForm } from "@/components/forms/AgencyVisitForm";
 import { CodeOfConductForm } from "@/components/forms/CodeOfConductForm";
 import { getAgencyVisitById } from "@/actions/agency-visit.action";
 import { getCodeOfConductById } from "@/actions/code-of-conduct.action";
+import { getAssetManagementById } from "@/actions/asset-management.action";
+import { AssetManagementForm } from "@/components/forms/AssetManagementForm";
 import { FORM_CONFIGS } from "@/types/forms";
 
 // Deriving FormType directly from the keys of the imported FORM_CONFIGS object.
@@ -27,6 +29,11 @@ const renderForm = async (formType: FormType, id: string) => {
             const submission = await getCodeOfConductById(id);
             if (!submission) notFound();
             return <CodeOfConductForm initialData={submission} />;
+        }
+        case 'assetManagement': {
+          const submission = await getAssetManagementById(id);
+          if (!submission) notFound();
+          return <AssetManagementForm initialData={submission} />;
         }
         // Add cases for other forms here as they are implemented
         // case 'declarationCumUndertaking': {
