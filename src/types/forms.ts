@@ -206,7 +206,7 @@ export const FORM_CONFIGS = {
     deadlineDay: 5
   },
   agencyVisits: {
-    id: 'agencyVisits',
+    id: 'agencyVisit',
     title: 'Agency Visit Details',
     description: 'Details of bank visits by agency personnel',
     category: 'monthly',
@@ -238,7 +238,7 @@ export const FORM_CONFIGS = {
     deadlineDay: 5
   },
   manpowerRegister: {
-    id: 'manpowerRegister',
+    id: 'agencyManpowerRegister',
     title: 'Agency Manpower Register',
     description: 'Employee details and management information',
     category: 'monthly',
@@ -254,7 +254,7 @@ export const FORM_CONFIGS = {
     deadlineDay: 5
   },
   penaltyMatrix: {
-    id: 'penaltyMatrix',
+    id: 'agencyPenaltyMatrix',
     title: 'Agency Penalty Matrix',
     description: 'Penalty tracking and corrective actions',
     category: 'monthly',
@@ -262,7 +262,7 @@ export const FORM_CONFIGS = {
     deadlineDay: 5
   },
   trainingTracker: {
-    id: 'trainingTracker',
+    id: 'agencyTrainingTracker',
     title: 'Agency Training Tracker',
     description: 'Training sessions and attendance tracking',
     category: 'monthly',
@@ -270,7 +270,7 @@ export const FORM_CONFIGS = {
     deadlineDay: 5
   },
   proactiveEscalation: {
-    id: 'proactiveEscalation',
+    id: 'proactiveEscalationTracker',
     title: 'Proactive Escalation Management Tracker',
     description: 'Customer escalation management tracking',
     category: 'monthly',

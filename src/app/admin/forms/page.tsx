@@ -130,7 +130,11 @@ export default function AdminFormsPage() {
             <tbody className="divide-y divide-gray-200">
               {filteredSubmissions.map((form) => (
                 <tr key={form.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{form.user.name}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <Link href={`/admin/users/${form.user.id}`} className="text-rose-600 hover:text-rose-900 hover:underline">
+                      {form.user.name}
+                    </Link>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {FORM_CONFIGS[form.formType as FormType]?.title || form.formType}
                   </td>
@@ -157,3 +161,4 @@ export default function AdminFormsPage() {
     </div>
   );
 }
+
