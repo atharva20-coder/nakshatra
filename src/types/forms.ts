@@ -38,7 +38,7 @@ export interface MonthlyComplianceRow extends BaseFormRow {
   srNo: string;
   complianceParameters: string;
   complied: string;                    // Yes/No/NA
-  agencyRemarks: string;
+  agencyRemarks: string | null;      // Corrected to allow null
   collectionManagerName: string;
   collectionManagerEmpId: string;
   collectionManagerSign: string;

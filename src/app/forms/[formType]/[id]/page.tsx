@@ -2,10 +2,12 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/agency-page-header";
 import { AgencyVisitForm } from "@/components/forms/AgencyVisitForm";
 import { CodeOfConductForm } from "@/components/forms/CodeOfConductForm";
+import { AssetManagementForm } from "@/components/forms/AssetManagementForm";
+import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm"; // Added import
 import { getAgencyVisitById } from "@/actions/agency-visit.action";
 import { getCodeOfConductById } from "@/actions/code-of-conduct.action";
 import { getAssetManagementById } from "@/actions/asset-management.action";
-import { AssetManagementForm } from "@/components/forms/AssetManagementForm";
+import { getMonthlyComplianceById } from "@/actions/monthly-compliance.action"; // Added import
 import { FORM_CONFIGS } from "@/types/forms";
 
 // Deriving FormType directly from the keys of the imported FORM_CONFIGS object.
@@ -35,19 +37,20 @@ const renderForm = async (formType: FormType, id: string) => {
           if (!submission) notFound();
           return <AssetManagementForm initialData={submission} />;
         }
-        // Add cases for other forms here as they are implemented
-        // case 'declarationCumUndertaking': {
-        //     const submission = await getDeclarationCumUndertakingById(id);
-        //     if (!submission) notFound();
-        //     return <DeclarationCumUndertakingForm initialData={submission} />;
-        // }
+        // Added case for the new form
+        case 'monthlyCompliance': {
+            const submission = await getMonthlyComplianceById(id);
+            if (!submission) notFound();
+            return <MonthlyComplianceForm initialData={submission} />;
+        }
         default:
             notFound();
     }
 }
 
 export default async function EditFormPage({ params }: EditFormPageProps) {
-  const { formType, id } = await params;
+  const resolvedParams = await params;
+  const { formType, id } = resolvedParams;
 
   if (!(formType in FORM_CONFIGS)) {
     notFound();
@@ -64,3 +67,4 @@ export default async function EditFormPage({ params }: EditFormPageProps) {
     </div>
   );
 }
+
