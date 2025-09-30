@@ -5,7 +5,7 @@ import { CodeOfConductForm } from "@/components/forms/CodeOfConductForm";
 import { DeclarationCumUndertakingForm } from "@/components/forms/DeclarationCumUndertakingForm";
 import { EscalationDetailsForm } from "@/components/forms/EscalationDetailsForm";
 import { ManpowerRegisterForm } from "@/components/forms/ManpowerRegisterForm";
-import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm";
+//import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm";
 import { PaymentRegisterForm } from "@/components/forms/PaymentRegisterForm";
 import { PenaltyMatrixForm } from "@/components/forms/PenaltyMatrixForm";
 import { ProactiveEscalationForm } from "@/components/forms/ProactiveEscalationForm";
@@ -14,7 +14,9 @@ import { RepoKitTrackerForm } from "@/components/forms/RepoKitTrackerForm";
 import { TelephoneDeclarationForm } from "@/components/forms/TelephoneDeclarationForm";
 import { TrainingTrackerForm } from "@/components/forms/TrainingTrackerForm";
 import { FORM_CONFIGS, FormType } from "@/types/forms";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
 
 interface NewFormPageProps {
     params: Promise<{
@@ -22,7 +24,7 @@ interface NewFormPageProps {
     }>;
 }
 
-const renderForm = (formType: FormType) => {
+const renderForm = async (formType: FormType) => {
     switch (formType) {
         case 'agencyVisits':
             return <AgencyVisitForm />;
@@ -30,8 +32,9 @@ const renderForm = (formType: FormType) => {
             return <CodeOfConductForm />;
         case 'declarationCumUndertaking':
             return <DeclarationCumUndertakingForm />;
-        case 'monthlyCompliance':
-            return <MonthlyComplianceForm />;
+//        case 'monthlyCompliance': {
+//            return <MonthlyComplianceForm />;
+//        }
         case 'assetManagement':
             return <AssetManagementForm />;
         case 'telephoneDeclaration':
@@ -63,13 +66,20 @@ export default async function NewFormPage({ params }: NewFormPageProps) {
   if (!(formType in FORM_CONFIGS)) {
     notFound();
   }
+
+  const headersList = await headers();
+  const session = await auth.api.getSession({ headers: headersList });
+  if (!session) {
+    redirect("/auth/login");
+  }
+  const userId = session.user.id;
   
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <PageHeader returnHref="/dashboard" returnLabel="Back to Dashboard" />
       <main className="p-8">
         <div className="container mx-auto">
-          {renderForm(formType)}
+          {await renderForm(formType)}
         </div>
       </main>
     </div>

@@ -11,7 +11,7 @@ export interface CodeOfConductRow extends BaseFormRow {
 }
 
 // 2. Declaration Collection Manager (for Declaration Cum Undertaking)
-export interface DeclarationManagerRow extends BaseFormRow {
+export interface DeclarationCumUndertakingRow extends BaseFormRow {
   collectionManagerName: string;
   collectionManagerEmployeeId: string;
   collectionManagerSignature: string;

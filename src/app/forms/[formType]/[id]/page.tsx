@@ -3,12 +3,14 @@ import { PageHeader } from "@/components/agency-page-header";
 import { AgencyVisitForm } from "@/components/forms/AgencyVisitForm";
 import { CodeOfConductForm } from "@/components/forms/CodeOfConductForm";
 import { AssetManagementForm } from "@/components/forms/AssetManagementForm";
-import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm"; // Added import
+//import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm"; // Added import
 import { getAgencyVisitById } from "@/actions/agency-visit.action";
 import { getCodeOfConductById } from "@/actions/code-of-conduct.action";
 import { getAssetManagementById } from "@/actions/asset-management.action";
-import { getMonthlyComplianceById } from "@/actions/monthly-compliance.action"; // Added import
+//import { getMonthlyComplianceById } from "@/actions/monthly-compliance.action"; // Added import
 import { FORM_CONFIGS } from "@/types/forms";
+import { DeclarationCumUndertakingForm } from "@/components/forms/DeclarationCumUndertakingForm";
+import { getDeclarationById } from "@/actions/declaration-cum-undertaking.action";
 
 // Deriving FormType directly from the keys of the imported FORM_CONFIGS object.
 type FormType = keyof typeof FORM_CONFIGS;
@@ -38,10 +40,10 @@ const renderForm = async (formType: FormType, id: string) => {
           return <AssetManagementForm initialData={submission} />;
         }
         // Added case for the new form
-        case 'monthlyCompliance': {
-            const submission = await getMonthlyComplianceById(id);
-            if (!submission) notFound();
-            return <MonthlyComplianceForm initialData={submission} />;
+        case 'declarationCumUndertaking' : {
+          const submission = await getDeclarationById(id);
+          if(!submission) notFound();
+          return <DeclarationCumUndertakingForm initialData={submission} />;
         }
         default:
             notFound();
