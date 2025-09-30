@@ -1,9 +1,9 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { ReturnButton } from "@/components/return-button";
 import { Input } from "@/components/ui/input";
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown, Search, Menu, X } from "lucide-react";
 import Link from "next/link";
 
 // Props for the header component
@@ -28,7 +28,6 @@ const DropdownMenu = ({
   links: DropdownLink[];
 }) => {
   return (
-    // FIX: Added py-2 and -my-2 to increase the hover target area without affecting layout
     <div className="relative group py-2 -my-2">
       <button className="flex items-center gap-2 text-sm font-medium hover:text-rose-600 dark:hover:text-rose-400 transition-colors">
         {label}
@@ -136,32 +135,149 @@ const trackerLinks: DropdownLink[] = [
     },
 ];
 
-export const PageHeader = ({ returnHref, returnLabel }: PageHeaderProps) => {
+const allLinks = [
+  { title: 'Declarations', links: declarationLinks },
+  { title: 'Registers', links: registerLinks },
+  { title: 'Trackers', links: trackerLinks },
+];
+
+// New AccordionItem component for the mobile menu
+const AccordionItem = ({
+  title,
+  links,
+  isOpen,
+  onClick,
+  onLinkClick,
+}: {
+  title: string;
+  links: DropdownLink[];
+  isOpen: boolean;
+  onClick: () => void;
+  onLinkClick: () => void;
+}) => {
   return (
-    <header className="bg-white dark:bg-gray-800 shadow-sm p-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
-      <div className="container mx-auto flex items-center justify-between gap-8">
-        {/* Left Side: Return Button */}
-        <div className="flex-shrink-0">
-          <ReturnButton href={returnHref} label={returnLabel} />
-        </div>
-
-        {/* Center: Search Bar */}
-        <div className="relative flex-grow mx-8 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <Input
-            type="search"
-            placeholder="Search forms..."
-            className="pl-10 w-full"
-          />
-        </div>
-
-        {/* Right Side: Dropdown Menus */}
-        <div className="flex-shrink-0 flex items-center gap-8">
-          <DropdownMenu label="Declarations" links={declarationLinks} />
-          <DropdownMenu label="Registers" links={registerLinks} />
-          <DropdownMenu label="Trackers" links={trackerLinks} />
+    <div className="border-b border-gray-200 dark:border-gray-700">
+      <button
+        onClick={onClick}
+        className="flex w-full items-center justify-between px-4 py-4 text-left font-bold text-lg text-rose-800 dark:text-rose-300"
+      >
+        <span>{title}</span>
+        <ChevronDown
+          className={`h-5 w-5 transition-transform duration-300 ${
+            isOpen ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+      <div
+        className={`overflow-hidden transition-all duration-300 ease-in-out ${
+          isOpen ? "max-h-[1000px]" : "max-h-0"
+        }`}
+      >
+        <div className="flex flex-col space-y-1 p-4 pt-0">
+          {links.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              onClick={onLinkClick}
+              className="block rounded-md px-4 py-3 text-base hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            >
+              {link.label}
+              {link.description && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {link.description}
+                </p>
+              )}
+            </Link>
+          ))}
         </div>
       </div>
+    </div>
+  );
+};
+
+
+export const PageHeader = ({ returnHref, returnLabel }: PageHeaderProps) => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [openAccordion, setOpenAccordion] = useState<string | null>(null);
+
+  const handleAccordionClick = (title: string) => {
+    setOpenAccordion(openAccordion === title ? null : title);
+  };
+  
+  return (
+    <header className="bg-white dark:bg-gray-800 shadow-sm p-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
+      <div className="container mx-auto">
+        {/* Main Header Bar */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex-shrink-0">
+            <ReturnButton href={returnHref} label={returnLabel} />
+          </div>
+
+          {/* Desktop Search Bar */}
+          <div className="relative hidden md:flex flex-grow mx-8 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Input
+              type="search"
+              placeholder="Search forms..."
+              className="pl-10 w-full"
+            />
+          </div>
+
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex flex-shrink-0 items-center gap-8">
+            <DropdownMenu label="Declarations" links={declarationLinks} />
+            <DropdownMenu label="Registers" links={registerLinks} />
+            <DropdownMenu label="Trackers" links={trackerLinks} />
+          </div>
+
+          {/* Mobile Menu Button */}
+          <div className="md:hidden">
+            <button onClick={() => setIsMenuOpen(true)} className="p-2">
+              <Menu className="h-6 w-6" />
+              <span className="sr-only">Open Menu</span>
+            </button>
+          </div>
+        </div>
+        
+        {/* Mobile Search Bar */}
+        <div className="mt-4 md:hidden">
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Input
+                type="search"
+                placeholder="Search forms..."
+                className="pl-10 w-full"
+              />
+            </div>
+        </div>
+      </div>
+
+      {/* Mobile Menu Overlay */}
+      {isMenuOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-white p-4 dark:bg-gray-900">
+          <div className="mb-8 flex items-center justify-between">
+             <div className="text-2xl font-bold">Nakshatra</div>
+             <button onClick={() => setIsMenuOpen(false)} className="p-2">
+                <X className="h-6 w-6" />
+                <span className="sr-only">Close Menu</span>
+             </button>
+          </div>
+          {/* Make the nav scrollable */}
+          <nav className="flex-1 overflow-y-auto">
+            {allLinks.map((section) => (
+              <AccordionItem
+                key={section.title}
+                title={section.title}
+                links={section.links}
+                isOpen={openAccordion === section.title}
+                onClick={() => handleAccordionClick(section.title)}
+                onLinkClick={() => setIsMenuOpen(false)}
+              />
+            ))}
+          </nav>
+        </div>
+      )}
     </header>
   );
 };
+
