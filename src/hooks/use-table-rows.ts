@@ -2,24 +2,23 @@
 
 import { useState } from "react";
 
-// The hook now uses a generic type `T`.
-// We add a constraint `T extends { id: number }` so we know each row has a unique id for React keys.
-export const useTableRows = <T extends { id: number }>(
-  initialRowCount: number,
-  rowFactory: (id: number) => T // A function to create a new row is now required.
+export const useTableRows = <T extends { id: number | string }>(
+  initialRows: T[],
+  rowFactory: (id: number) => T
 ) => {
-  const [rows, setRows] = useState<T[]>(() =>
-    Array.from({ length: initialRowCount }, (_, i) => rowFactory(i + 1))
-  );
+  const [rows, setRows] = useState<T[]>(() => initialRows);
 
   const addRow = () => {
     setRows((prevRows) => [...prevRows, rowFactory(prevRows.length + 1)]);
   };
 
-  // The field is now of type `keyof T`, making it type-safe for any object shape.
+  const removeRow = (id: number | string) => {
+    setRows((prevRows) => prevRows.filter((row) => row.id !== id));
+  };
+
   const handleInputChange = (
-    id: number,
-    field: keyof Omit<T, "id">,
+    id: number | string,
+    field: keyof T,
     value: string
   ) => {
     setRows((prevRows) =>
@@ -29,10 +28,9 @@ export const useTableRows = <T extends { id: number }>(
     );
   };
 
-  // New function to update a specific value in a row programmatically
   const updateRowValue = (
-    id: number,
-    field: keyof Omit<T, "id">,
+    id: number | string,
+    field: keyof T,
     value: string
   ) => {
     setRows((prevRows) =>
@@ -42,5 +40,6 @@ export const useTableRows = <T extends { id: number }>(
     );
   };
 
-  return { rows, addRow, handleInputChange, updateRowValue };
+
+  return { rows, setRows, addRow, removeRow, handleInputChange, updateRowValue };
 };
