@@ -39,6 +39,5 @@ export const useTableRows = <T extends { id: number | string }>(
       )
     );
   };
-
   return { rows, setRows, addRow, removeRow, handleInputChange, updateRowValue };
 };
