@@ -8,7 +8,8 @@ import { ManpowerRegisterForm } from "@/components/forms/ManpowerRegisterForm";
 import { ProductDeclarationForm } from "@/components/forms/ProductDeclarationForm";
 import { ProactiveEscalationForm } from "@/components/forms/ProactiveEscalationForm";
 import { PaymentRegisterForm } from "@/components/forms/PaymentRegisterForm";
-
+import { CodeOfConductForm } from "@/components/forms/CodeOfConductForm"
+import { getCodeOfConductById } from "@/actions/code-of-conduct.action";
 import { getAgencyVisitById } from "@/actions/agency-visit.action";
 import { getAssetManagementById } from "@/actions/asset-management.action";
 import { getDeclarationById } from "@/actions/declaration-cum-undertaking.action";
@@ -31,6 +32,11 @@ interface EditFormPageProps {
 
 const renderForm = async (formType: FormType, id: string) => {
     switch (formType) {
+        case 'codeOfConduct': {
+            const submission = await getCodeOfConductById(id);
+            if (!submission) notFound();
+            return <CodeOfConductForm initialData={submission} />;
+        }
         case 'agencyVisits': {
             const submission = await getAgencyVisitById(id);
             if (!submission) notFound();

@@ -6,9 +6,14 @@ import { useRouter } from "next/navigation";
 import { useTableRows } from "@/hooks/use-table-rows";
 import { Input } from "@/components/ui/input";
 import { Button } from '@/components/ui/button';
-import { Trash, Save, Send, Loader2 } from 'lucide-react';
+import { Trash, Save, Send, Loader2, History, AlertCircle } from 'lucide-react';
 import { DeclarationCumUndertakingRow, FORM_CONFIGS } from "@/types/forms";
 import { saveDeclarationCumUndertakingAction, deleteDeclarationCumUndertakingAction } from '@/actions/declaration-cum-undertaking.action';
+import { checkFormApprovalStatusAction } from "@/actions/approval-request.action";
+import { ApprovalRequestDialog } from "@/components/approval-request-dialog";
+import { FormHistoryDialog } from "@/components/form-history-dialog";
+import { useSession } from "@/lib/auth-client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface DeclarationCumUndertakingFormProps {
   initialData?: {
@@ -27,30 +32,59 @@ const createNewRow = (id: number): DeclarationCumUndertakingRow => ({
 
 export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUndertakingFormProps) => {
   const router = useRouter();
+  const { data: session } = useSession();
   const [isPending, setIsPending] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [showApprovalDialog, setShowApprovalDialog] = useState(false);
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
+  const [approvalStatus, setApprovalStatus] = useState<{
+    hasRequest: boolean;
+    status?: string;
+    requestId?: string;
+  }>({ hasRequest: false });
   const metadata = FORM_CONFIGS.declarationCumUndertaking;
 
-  // Initialize rows from initial data or create a new row
   const { rows, addRow, handleInputChange, removeRow } = useTableRows<DeclarationCumUndertakingRow>(
     initialData?.details?.length ? initialData.details.map(d => ({ ...d })) : [createNewRow(1)],
     createNewRow
   );
 
-  // Set submission status from initial data
   useEffect(() => {
     setIsSubmitted(initialData?.status === "SUBMITTED");
+    
+    if (initialData?.id && initialData?.status === "SUBMITTED") {
+      checkApprovalStatus();
+    }
   }, [initialData]);
 
-  // Handle both saving as a draft and submitting the form
+  const checkApprovalStatus = async () => {
+    if (!initialData?.id) return;
+    
+    const result = await checkFormApprovalStatusAction(
+      initialData.id,
+      'declarationCumUndertaking'
+    );
+    
+    if (!result.error && result.hasRequest) {
+      setApprovalStatus({
+        hasRequest: true,
+        status: result.status,
+        requestId: result.requestId
+      });
+    }
+  };
+
+  const canEdit = () => {
+    if (!isSubmitted) return true;
+    return approvalStatus.hasRequest && approvalStatus.status === 'APPROVED';
+  };
+
   const handleSaveOrSubmit = async (status: "DRAFT" | "SUBMITTED") => {
-    // Validate that at least one manager is added
     if (rows.length === 0) {
       toast.error("Please add at least one collection manager.");
       return;
     }
 
-    // Validate required fields
     const hasEmptyFields = rows.some(
       row => !row.collectionManagerName || !row.collectionManagerEmployeeId || !row.collectionManagerSignature
     );
@@ -61,7 +95,6 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
     }
 
     setIsPending(true);
-    // Remove the temporary client-side ID before sending to the server
     const rowsToSubmit = rows.map(({ id, ...rest }) => rest);
     const result = await saveDeclarationCumUndertakingAction(rowsToSubmit, status, initialData?.id);
     setIsPending(false);
@@ -73,14 +106,12 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
       if (status === "SUBMITTED") {
         router.push("/dashboard");
       } else if (result.formId) {
-        // If it's a new draft, redirect to the new URL with the form ID
         router.push(`/forms/declarationCumUndertaking/${result.formId}`);
       }
       router.refresh();
     }
   };
 
-  // Handle the deletion of a draft
   const handleDelete = async () => {
     if (!initialData?.id) {
       toast.error("Form ID not found.");
@@ -103,10 +134,29 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
+      {/* Approval Status Alert */}
+      {approvalStatus.hasRequest && approvalStatus.status === 'PENDING' && (
+        <Alert className="border-yellow-200 bg-yellow-50">
+          <AlertCircle className="h-4 w-4 text-yellow-600" />
+          <AlertDescription className="text-yellow-800">
+            You have a pending approval request for this form. You can edit once the admin approves your request.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {approvalStatus.hasRequest && approvalStatus.status === 'APPROVED' && (
+        <Alert className="border-green-200 bg-green-50">
+          <AlertCircle className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-800">
+            Your request to edit this form has been approved. You can now make changes.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Submission status banner */}
-      {isSubmitted && (
+      {isSubmitted && !canEdit() && (
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 rounded-lg p-4 text-center font-medium">
-          <p>This form has been submitted and cannot be edited.</p>
+          <p>This form has been submitted and cannot be edited without approval.</p>
         </div>
       )}
 
@@ -116,12 +166,33 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
           <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{metadata.title}</h2>
           <p className="text-muted-foreground mt-1">{metadata.description}</p>
         </div>
-        {initialData?.id && !isSubmitted && (
-          <Button variant="destructive" onClick={handleDelete} disabled={isPending}>
-            <Trash className="h-4 w-4 mr-2" />
-            Delete Draft
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {session?.user && (
+            <Button
+              variant="outline"
+              onClick={() => setShowHistoryDialog(true)}
+              disabled={isPending}
+            >
+              <History className="h-4 w-4 mr-2" />
+              View History
+            </Button>
+          )}
+          {isSubmitted && !canEdit() && (
+            <Button
+              variant="outline"
+              onClick={() => setShowApprovalDialog(true)}
+              disabled={isPending || approvalStatus.hasRequest}
+            >
+              Request Edit Access
+            </Button>
+          )}
+          {initialData?.id && !isSubmitted && (
+            <Button variant="destructive" onClick={handleDelete} disabled={isPending}>
+              <Trash className="h-4 w-4 mr-2" />
+              Delete Draft
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Declaration text */}
@@ -138,7 +209,7 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
       <div className="space-y-4">
         <div className="flex justify-between items-center">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Authorized Collection Managers</h3>
-          {!isSubmitted && (
+          {canEdit() && (
             <Button onClick={addRow} disabled={isPending} variant="outline">
               Add Manager
             </Button>
@@ -165,21 +236,21 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
                 <Input
                   value={row.collectionManagerName}
                   onChange={(e) => handleInputChange(row.id, "collectionManagerName", e.target.value)}
-                  disabled={isSubmitted || isPending}
+                  disabled={!canEdit() || isPending}
                   placeholder="Enter manager's full name"
                   className="bg-white dark:bg-gray-900"
                 />
                 <Input
                   value={row.collectionManagerEmployeeId}
                   onChange={(e) => handleInputChange(row.id, "collectionManagerEmployeeId", e.target.value)}
-                  disabled={isSubmitted || isPending}
+                  disabled={!canEdit() || isPending}
                   placeholder="Employee ID"
                   className="bg-white dark:bg-gray-900"
                 />
                 <Input
                   value={row.collectionManagerSignature}
                   onChange={(e) => handleInputChange(row.id, "collectionManagerSignature", e.target.value)}
-                  disabled={isSubmitted || isPending}
+                  disabled={!canEdit() || isPending}
                   placeholder="Signature"
                   className="bg-white dark:bg-gray-900"
                 />
@@ -187,7 +258,7 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
                   variant="ghost"
                   size="icon"
                   onClick={() => removeRow(row.id)}
-                  disabled={isSubmitted || isPending || rows.length <= 1}
+                  disabled={!canEdit() || isPending || rows.length <= 1}
                   title={rows.length <= 1 ? "At least one manager is required" : "Remove manager"}
                 >
                   <Trash className="h-4 w-4 text-red-500" />
@@ -199,7 +270,7 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
       </div>
 
       {/* Action buttons */}
-      {!isSubmitted && (
+      {canEdit() && (
         <div className="flex justify-end space-x-4 pt-4">
           <Button 
             variant="outline" 
@@ -218,6 +289,32 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
             Submit for Approval
           </Button>
         </div>
+      )}
+
+      {/* Dialogs */}
+      {initialData?.id && (
+        <>
+          <ApprovalRequestDialog
+            isOpen={showApprovalDialog}
+            onClose={() => setShowApprovalDialog(false)}
+            formType="declarationCumUndertaking"
+            formId={initialData.id}
+            onSuccess={() => {
+              checkApprovalStatus();
+              router.refresh();
+            }}
+          />
+          
+          {session?.user && (
+            <FormHistoryDialog
+              isOpen={showHistoryDialog}
+              onClose={() => setShowHistoryDialog(false)}
+              userId={session.user.id}
+              formType="declarationCumUndertaking"
+              formTitle={metadata.title}
+            />
+          )}
+        </>
       )}
     </div>
   );
