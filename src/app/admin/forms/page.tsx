@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
@@ -42,8 +42,9 @@ interface UserFormStatus {
 export default function AdminFormsPage() {
   const router = useRouter();
   const { data: session, isPending: isSessionPending } = useSession();
-  const observerTarget = useRef<HTMLDivElement>(null);
+  const observerTarget = useRef<HTMLDivElement | null>(null);
 
+  // Data state
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -54,9 +55,9 @@ export default function AdminFormsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
-  const [pageSize] = useState(50);
+  const pageSize = 50;
 
-  // Filter state
+  // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
@@ -64,137 +65,151 @@ export default function AdminFormsPage() {
 
   // Form status cache
   const [userFormStatuses, setUserFormStatuses] = useState<Record<string, UserFormStatus>>({});
-  const [loadingStatuses, setLoadingStatuses] = useState<Set<string>>(new Set());
 
+  // loadingStatuses kept in a ref to avoid re-creating callbacks when mutated
+  const loadingStatusesRef = useRef<Set<string>>(new Set());
+  const [, setLoadingTick] = useState(0); // used only to force re-render when loadingStatuses changes
+  const forceLoadingUpdate = () => setLoadingTick(t => t + 1);
+
+  // mounted ref to avoid state updates after unmount
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
+  // Debounce for search input (simple)
+  const searchDebounceRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (searchDebounceRef.current) window.clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = window.setTimeout(() => {
+      setSearchQuery(searchInput.trim());
+    }, 350);
+    return () => {
+      if (searchDebounceRef.current) window.clearTimeout(searchDebounceRef.current);
+    };
+  }, [searchInput]);
+
+  // Memoized options
+  const monthOptions = useMemo(() => {
+    return Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: new Date(2000, i, 1).toLocaleString('default', { month: 'long' }) }));
+  }, []);
+
+  const yearOptions = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    return Array.from({ length: 6 }, (_, i) => currentYear - i);
+  }, []);
+
+  // Ensure only admin can access
   useEffect(() => {
     if (isSessionPending) return;
-
     if (!session || session.user.role !== UserRole.ADMIN) {
-        router.push("/profile");
-        return;
+      router.push('/profile');
+      return;
     }
 
-    // Reset and load initial data when filters change
+    // Reset and fetch
     setUsers([]);
     setCurrentPage(1);
     setHasMore(true);
     setUserFormStatuses({});
     fetchUsers(1, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, isSessionPending, router, searchQuery, selectedMonth, selectedYear]);
 
-  // Infinite scroll observer
+  // Intersection observer for infinite scroll
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isLoading && !isLoadingMore) {
-          loadMoreUsers();
-        }
-      },
-      { threshold: 0.1, rootMargin: '100px' }
-    );
+    const target = observerTarget.current;
+    if (!target) return;
 
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current);
-    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && hasMore && !isLoading && !isLoadingMore) {
+        loadMoreUsers();
+      }
+    }, { threshold: 0.15, rootMargin: '150px' });
 
+    observer.observe(target);
     return () => observer.disconnect();
-  }, [hasMore, isLoading, isLoadingMore, currentPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMore, isLoading, isLoadingMore]);
 
-  const fetchUsers = async (page: number, isInitial: boolean = false) => {
-    if (isInitial) {
-      setIsLoading(true);
-    } else {
-      setIsLoadingMore(true);
-    }
+  // Fetch users
+  const fetchUsers = async (page: number, isInitial = false) => {
+    if (isInitial) setIsLoading(true); else setIsLoadingMore(true);
 
     try {
-      const result = await getUsersWithSubmissionStats(
-        page,
-        pageSize,
-        searchQuery,
-        selectedMonth,
-        selectedYear
-      );
-      
-      if (result.error) {
-        setError(result.error);
+      const res = await getUsersWithSubmissionStats(page, pageSize, searchQuery, selectedMonth, selectedYear);
+      if (res.error) {
+        if (!mountedRef.current) return;
+        setError(res.error);
       } else {
-        const newUsers = result.users || [];
-        
+        const newUsers: User[] = res.users || [];
+        if (!mountedRef.current) return;
+
         setUsers(prev => isInitial ? newUsers : [...prev, ...newUsers]);
-        setTotalCount(result.totalCount || 0);
-        setHasMore(newUsers.length === pageSize && (page * pageSize) < (result.totalCount || 0));
-        
-        // Load form statuses for new users
-        newUsers.forEach(user => {
-          loadUserFormStatus(user.id);
-        });
+        setTotalCount(res.totalCount || 0);
+        setHasMore((newUsers.length === pageSize) && ((page * pageSize) < (res.totalCount || 0)));
+
+        // Load statuses (pass userName to avoid race conditions)
+        newUsers.forEach(u => loadUserFormStatus(u.id, u.name));
       }
     } catch (err) {
-      setError("Failed to fetch users");
+      if (!mountedRef.current) return;
+      setError('Failed to fetch users');
+      console.error('fetchUsers error', err);
     } finally {
-      if (isInitial) {
-        setIsLoading(false);
-      } else {
-        setIsLoadingMore(false);
-      }
+      if (!mountedRef.current) return;
+      if (isInitial) setIsLoading(false); else setIsLoadingMore(false);
     }
   };
 
   const loadMoreUsers = useCallback(() => {
     if (!hasMore || isLoadingMore) return;
-    const nextPage = currentPage + 1;
-    setCurrentPage(nextPage);
-    fetchUsers(nextPage, false);
+    const next = currentPage + 1;
+    setCurrentPage(next);
+    fetchUsers(next, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, hasMore, isLoadingMore]);
 
-  const loadUserFormStatus = useCallback(async (userId: string) => {
-    if (loadingStatuses.has(userId) || userFormStatuses[userId]) return;
+  // Improved loadUserFormStatus: uses refs to check loading and avoids stale user name
+  const loadUserFormStatus = useCallback(async (userId: string, userNameFallback?: string) => {
+    const isLoadingAlready = loadingStatusesRef.current.has(userId);
+    if (isLoadingAlready || userFormStatuses[userId]) return;
 
-    setLoadingStatuses(prev => new Set(prev).add(userId));
+    loadingStatusesRef.current.add(userId);
+    forceLoadingUpdate();
 
     try {
-      const result = await getUserFormStatus(userId, selectedMonth, selectedYear);
-      
-      if (!result.error && result.formStatuses) {
+      const res = await getUserFormStatus(userId, selectedMonth, selectedYear);
+      if (!mountedRef.current) return;
+      if (!res.error && res.formStatuses) {
         setUserFormStatuses(prev => ({
           ...prev,
           [userId]: {
             userId,
-            userName: users.find(u => u.id === userId)?.name || 'Unknown',
-            forms: result.formStatuses
+            userName: userNameFallback || prev[userId]?.userName || 'Unknown',
+            forms: res.formStatuses
           }
         }));
       }
     } catch (err) {
-      console.error(`Failed to load status for user ${userId}`, err);
+      console.error(`Failed to load status for ${userId}`, err);
     } finally {
-      setLoadingStatuses(prev => {
-        const next = new Set(prev);
-        next.delete(userId);
-        return next;
-      });
+      loadingStatusesRef.current.delete(userId);
+      forceLoadingUpdate();
     }
-  }, [users, selectedMonth, selectedYear, loadingStatuses, userFormStatuses]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMonth, selectedYear]);
 
-  const handleSearch = () => {
-    setSearchQuery(searchInput);
+  const handleSearchClick = () => {
+    // immediate apply (debounce also updates searchQuery)
+    setSearchQuery(searchInput.trim());
   };
 
-  const handleMonthChange = (month: number) => {
-    setSelectedMonth(month);
-  };
-
-  const handleYearChange = (year: number) => {
-    setSelectedYear(year);
-  };
+  const handleMonthChange = (month: number) => { setSelectedMonth(month); };
+  const handleYearChange = (year: number) => { setSelectedYear(year); };
 
   const handleExportToExcel = async (userId: string, userName: string) => {
     setExportingUserId(userId);
-    
     try {
       const result = await getAgencyExportDataAction(userId);
-      
       if (result.error) {
         toast.error(result.error);
         return;
@@ -213,18 +228,14 @@ export default function AdminFormsPage() {
       ];
 
       Object.entries(result.forms ?? {}).forEach(([formType, data]) => {
-        summaryData.push([
-          FORM_CONFIGS[formType as FormType]?.title || formType,
-          data.length.toString()
-        ]);
+        summaryData.push([FORM_CONFIGS[formType as FormType]?.title || formType, (data || []).length.toString()]);
       });
 
       const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
       XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
 
       Object.entries(result.forms ?? {}).forEach(([formType, submissions]: [string, any]) => {
-        if (submissions.length === 0) return;
-
+        if (!submissions || submissions.length === 0) return;
         const formConfig = FORM_CONFIGS[formType as FormType];
         const sheetData: any[] = [];
 
@@ -237,100 +248,90 @@ export default function AdminFormsPage() {
           sheetData.push(['Status:', sub.status]);
           sheetData.push([]);
 
-          if (sub.data.details && sub.data.details.length > 0) {
-            const headers = Object.keys(sub.data.details[0]).filter(key => key !== 'id');
+          if (sub.data?.details && sub.data.details.length > 0) {
+            const headers = Object.keys(sub.data.details[0]).filter((k: string) => k !== 'id');
             sheetData.push(headers);
-
             sub.data.details.forEach((detail: any) => {
-              const row = headers.map(header => {
-                const value = detail[header];
+              const row = headers.map((h: string) => {
+                const value = detail[h];
                 if (value instanceof Date) return value.toLocaleDateString();
-                return value?.toString() || '';
+                return (value ?? '').toString();
               });
               sheetData.push(row);
             });
           }
 
           sheetData.push([]);
-          sheetData.push([]);
         });
 
         const sheet = XLSX.utils.aoa_to_sheet(sheetData);
-        const sheetName = formConfig?.title.substring(0, 31) || formType.substring(0, 31);
+        const sheetName = (formConfig?.title || formType).substring(0, 31);
         XLSX.utils.book_append_sheet(wb, sheet, sheetName);
       });
 
       const fileName = `${userName.replace(/[^a-z0-9]/gi, '_')}_Forms_Export_${new Date().toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, fileName);
-
       toast.success('Excel file exported successfully!');
-    } catch (error) {
-      console.error('Export error:', error);
+    } catch (err) {
+      console.error('Export error:', err);
       toast.error('Failed to export data to Excel');
     } finally {
-      setExportingUserId(null);
+      if (mountedRef.current) setExportingUserId(null);
     }
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'SUBMITTED':
-        return <Badge className="bg-green-100 text-green-800"><CheckCircle className="h-3 w-3 mr-1" />Submitted</Badge>;
+        return <Badge className="bg-green-100 text-green-800 inline-flex items-center gap-1"><CheckCircle className="h-3 w-3" />Submitted</Badge>;
       case 'DRAFT':
-        return <Badge className="bg-yellow-100 text-yellow-800"><Clock className="h-3 w-3 mr-1" />Draft</Badge>;
+        return <Badge className="bg-yellow-100 text-yellow-800 inline-flex items-center gap-1"><Clock className="h-3 w-3" />Draft</Badge>;
       case 'OVERDUE':
-        return <Badge variant="destructive"><AlertTriangle className="h-3 w-3 mr-1" />Overdue</Badge>;
+        return <Badge variant="destructive" className="inline-flex items-center gap-1"><AlertTriangle className="h-3 w-3" />Overdue</Badge>;
       default:
-        return <Badge variant="outline">Not Started</Badge>;
+        return <Badge variant="outline" className="border-rose-900 text-rose-900">Not Started</Badge>;
     }
   };
 
-  const getMonthOptions = () => {
-    const months = [];
-    for (let i = 1; i <= 12; i++) {
-      months.push({ value: i, label: new Date(2000, i - 1, 1).toLocaleString('default', { month: 'long' }) });
-    }
-    return months;
-  };
-
-  const getYearOptions = () => {
-    const currentYear = new Date().getFullYear();
-    const years = [];
-    for (let i = currentYear; i >= currentYear - 5; i--) {
-      years.push(i);
-    }
-    return years;
-  };
+  // Small helper to render table header titles (respects length)
+  const renderTitle = (t?: string) => (t && t.length > 18 ? t.substring(0, 18) + '...' : (t || ''));
 
   if (isSessionPending) {
-      return <div className="container mx-auto p-8">Loading...</div>;
+    return (
+      <div className="container mx-auto p-8 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-10 w-10 animate-spin text-rose-900 mx-auto mb-3" />
+          <div className="text-gray-600">Checking session...</div>
+        </div>
+      </div>
+    );
   }
 
   if (error && users.length === 0) {
-      return <div className="container mx-auto p-8">Error: {error}</div>;
+    return <div className="container mx-auto p-8">Error: {error}</div>;
   }
 
   return (
-    <div className="container mx-auto p-8">
-      <div className="mb-6">
-        <h1 className="text-4xl font-bold mb-2">Admin - Form Management</h1>
-        <p className="text-gray-600">Monitor all agency form submissions and compliance status</p>
-      </div>
+    <div className="container mx-auto p-6">
+      <header className="mb-6">
+        <h1 className="text-3xl font-semibold text-rose-900">Admin • Form Management</h1>
+        <p className="text-sm text-gray-600">Track agency submissions and compliance — month & year filters are applied.</p>
+      </header>
 
-      <div className="space-y-6">
-        {/* Filters */}
-        <div className="bg-white rounded-lg shadow-md p-4 sticky top-0 z-20">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <section className="space-y-6">
+        {/* Filters card */}
+        <div className="bg-white rounded-2xl shadow p-4 border-t-4 border-rose-900 sticky top-4 z-20">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">Search Agencies</label>
               <div className="flex gap-2">
                 <Input
-                  placeholder="Search by name..."
+                  placeholder="Search by agency name or email"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
                 />
-                <Button onClick={handleSearch} className="bg-rose-800 hover:bg-rose-900">
+                <Button onClick={handleSearchClick} className="bg-rose-900 hover:bg-rose-800 text-white">
                   <Search className="h-4 w-4" />
                 </Button>
               </div>
@@ -343,10 +344,8 @@ export default function AdminFormsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {getMonthOptions().map(month => (
-                    <SelectItem key={month.value} value={month.value.toString()}>
-                      {month.label}
-                    </SelectItem>
+                  {monthOptions.map(m => (
+                    <SelectItem key={m.value} value={m.value.toString()}>{m.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -359,10 +358,8 @@ export default function AdminFormsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {getYearOptions().map(year => (
-                    <SelectItem key={year} value={year.toString()}>
-                      {year}
-                    </SelectItem>
+                  {yearOptions.map(y => (
+                    <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -370,148 +367,120 @@ export default function AdminFormsPage() {
           </div>
         </div>
 
-        {/* Stats Bar */}
-        <div className="flex justify-between items-center text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-          <span>
-            Showing <strong>{users.length}</strong> of <strong>{totalCount}</strong> agencies
-          </span>
-          <span>
-            Viewing: <strong>{getMonthOptions().find(m => m.value === selectedMonth)?.label} {selectedYear}</strong>
-          </span>
+        {/* Stats bar */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 text-sm text-gray-600">
+          <div>Showing <strong className="text-gray-900">{users.length}</strong> of <strong className="text-gray-900">{totalCount}</strong> agencies</div>
+          <div>Viewing: <strong className="text-gray-900">{monthOptions.find(m=>m.value===selectedMonth)?.label} {selectedYear}</strong></div>
         </div>
 
-        {/* Status Overview */}
+        {/* Main table */}
         {isLoading ? (
-          <div className="bg-white rounded-lg shadow-md p-8 text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-rose-800" />
-            <div className="text-gray-600">Loading agencies...</div>
+          <div className="bg-white rounded-2xl shadow p-8 text-center">
+            <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-rose-900" />
+            <div className="text-gray-600">Loading agencies…</div>
           </div>
         ) : (
-          <>
-            <div className="bg-white rounded-lg shadow-md overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full">
-                  <thead className="bg-gray-50 sticky top-[140px] z-10">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky left-0 bg-gray-50 z-10">
-                        Agency
-                      </th>
-                      {Object.entries(FORM_CONFIGS).filter(([, config]) => config.isRequired).map(([formType, config]) => (
-                        <th key={formType} className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase min-w-[120px]">
-                          {config.title.length > 20 ? config.title.substring(0, 20) + '...' : config.title}
-                        </th>
-                      ))}
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase sticky right-0 bg-gray-50 z-10">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {users.map((user) => {
-                      const userStatus = userFormStatuses[user.id];
-                      const isLoadingStatus = loadingStatuses.has(user.id);
-                      const hasOverdue = userStatus ? Object.values(userStatus.forms).some(f => f.status === 'OVERDUE') : false;
-                      
-                      return (
-                        <tr key={user.id} className={hasOverdue ? 'bg-red-50' : ''}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-inherit z-10">
-                            <Link href={`/admin/users/${user.id}`} className="text-blue-600 hover:text-blue-900 hover:underline">
-                              {user.name}
-                            </Link>
-                            {hasOverdue && (
-                              <span className="ml-2 text-red-600">
-                                <AlertTriangle className="h-4 w-4 inline" />
-                              </span>
-                            )}
-                          </td>
-                          {Object.entries(FORM_CONFIGS).filter(([, config]) => config.isRequired).map(([formType]) => {
-                            const formStatus = userStatus?.forms[formType];
-                            return (
-                              <td key={formType} className="px-4 py-4 text-center">
-                                {isLoadingStatus ? (
-                                  <div className="flex justify-center">
-                                    <div className="animate-pulse bg-gray-200 h-6 w-20 rounded"></div>
-                                  </div>
-                                ) : formStatus ? (
-                                  <div className="flex flex-col items-center gap-1">
-                                    {getStatusBadge(formStatus.status)}
-                                    {formStatus.formId && (
-                                      <Link
-                                        href={`/forms/${formType}/${formStatus.formId}`}
-                                        className="text-xs text-blue-600 hover:underline"
-                                      >
-                                        View
-                                      </Link>
-                                    )}
-                                  </div>
-                                ) : (
-                                  getStatusBadge('NOT_STARTED')
-                                )}
-                              </td>
-                            );
-                          })}
-                          <td className="px-6 py-4 text-center sticky right-0 bg-inherit z-10">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleExportToExcel(user.id, user.name)}
-                              disabled={exportingUserId === user.id}
-                            >
-                              {exportingUserId === user.id ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  Exporting...
-                                </>
+          <div className="bg-white rounded-2xl shadow overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-collapse">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky left-0 bg-gray-50 z-10">Agency</th>
+                    {Object.entries(FORM_CONFIGS).filter(([,cfg]) => cfg.isRequired).map(([formType, cfg]) => (
+                      <th key={formType} className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase min-w-[120px]">{renderTitle(cfg.title)}</th>
+                    ))}
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase sticky right-0 bg-gray-50 z-10">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {users.map(user => {
+                    const userStatus = userFormStatuses[user.id];
+                    const isLoadingStatus = loadingStatusesRef.current.has(user.id);
+                    const hasOverdue = userStatus ? Object.values(userStatus.forms).some(f=>f.status==='OVERDUE') : false;
+
+                    return (
+                      <tr key={user.id} className={hasOverdue ? 'bg-red-50' : ''}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-inherit z-10">
+                          <Link href={`/admin/users/${user.id}`} className="text-rose-900 hover:underline">{user.name}</Link>
+                          {hasOverdue && <span className="ml-2 text-red-600"><AlertTriangle className="h-4 w-4 inline" /></span>}
+                        </td>
+
+                        {Object.entries(FORM_CONFIGS).filter(([,cfg]) => cfg.isRequired).map(([formType]) => {
+                          const formStatus = userStatus?.forms[formType];
+                          return (
+                            <td key={formType} className="px-4 py-4 text-center align-middle">
+                              {isLoadingStatus ? (
+                                <div className="flex justify-center">
+                                  <div className="animate-pulse bg-gray-200 h-6 w-20 rounded" />
+                                </div>
+                              ) : formStatus ? (
+                                <div className="flex flex-col items-center gap-1">
+                                  {getStatusBadge(formStatus.status)}
+                                  {formStatus.formId && (
+                                    <Link href={`/forms/${formType}/${formStatus.formId}`} className="text-xs text-rose-900 hover:underline">View</Link>
+                                  )}
+                                </div>
                               ) : (
-                                <>
-                                  <Download className="h-4 w-4 mr-2" />
-                                  Export
-                                </>
+                                getStatusBadge('NOT_STARTED')
                               )}
-                            </Button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              
-              {users.length === 0 && !isLoading && (
-                <div className="text-center text-gray-500 py-12">
-                  {searchQuery ? (
-                    <>
-                      <Search className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                      <p className="text-lg font-medium">No agencies found</p>
-                      <p className="text-sm">Try adjusting your search criteria</p>
-                    </>
-                  ) : (
-                    <>
-                      <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                      <p className="text-lg font-medium">No agencies registered yet</p>
-                    </>
-                  )}
-                </div>
-              )}
+                            </td>
+                          );
+                        })}
+
+                        <td className="px-6 py-4 text-center sticky right-0 bg-inherit z-10">
+                          <Button size="sm" variant="outline" onClick={() => handleExportToExcel(user.id, user.name)} disabled={exportingUserId===user.id}>
+                            {exportingUserId === user.id ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin text-rose-900" />
+                                Exporting...
+                              </>
+                            ) : (
+                              <>
+                                <Download className="h-4 w-4 mr-2 text-rose-900" />
+                                <span className="text-rose-900">Export</span>
+                              </>
+                            )}
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
 
-            {/* Infinite Scroll Loader */}
-            <div ref={observerTarget} className="py-8">
+            {users.length === 0 && (
+              <div className="text-center text-gray-500 py-12">
+                {searchQuery ? (
+                  <>
+                    <Search className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                    <p className="text-lg font-medium">No agencies found</p>
+                    <p className="text-sm">Try adjusting your search criteria</p>
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                    <p className="text-lg font-medium">No agencies registered yet</p>
+                  </>
+                )}
+              </div>
+            )}
+
+            <div ref={observerTarget} className="py-6">
               {isLoadingMore && (
                 <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="h-8 w-8 animate-spin text-rose-800" />
+                  <Loader2 className="h-8 w-8 animate-spin text-rose-900" />
                   <p className="text-sm text-gray-600">Loading more agencies...</p>
                 </div>
               )}
+
               {!hasMore && users.length > 0 && (
-                <div className="text-center text-gray-500 py-4">
-                  <p className="text-sm">✓ All agencies loaded ({totalCount} total)</p>
-                </div>
+                <div className="text-center text-gray-500 py-4">✓ All agencies loaded ({totalCount} total)</div>
               )}
             </div>
-          </>
+          </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

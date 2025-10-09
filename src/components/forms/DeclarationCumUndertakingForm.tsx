@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useTableRows } from "@/hooks/use-table-rows";
@@ -9,11 +9,11 @@ import { Button } from '@/components/ui/button';
 import { Trash, Save, Send, Loader2, History, AlertCircle } from 'lucide-react';
 import { DeclarationCumUndertakingRow, FORM_CONFIGS } from "@/types/forms";
 import { saveDeclarationCumUndertakingAction, deleteDeclarationCumUndertakingAction } from '@/actions/declaration-cum-undertaking.action';
-import { checkFormApprovalStatusAction } from "@/actions/approval-request.action";
 import { ApprovalRequestDialog } from "@/components/approval-request-dialog";
-import { FormHistoryDialog } from "@/components/form-history-dialog";
+import { ApprovalHistoryDialog } from "@/components/approval-history-dialog";
 import { useSession } from "@/lib/auth-client";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useFormApproval } from "@/hooks/use-form-approval";
+import { ApprovalStatusAlerts } from "@/components/forms/ApprovalStatusAlerts";
 
 interface DeclarationCumUndertakingFormProps {
   initialData?: {
@@ -34,50 +34,25 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
   const router = useRouter();
   const { data: session } = useSession();
   const [isPending, setIsPending] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
   const [showApprovalDialog, setShowApprovalDialog] = useState(false);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
-  const [approvalStatus, setApprovalStatus] = useState<{
-    hasRequest: boolean;
-    status?: string;
-    requestId?: string;
-  }>({ hasRequest: false });
   const metadata = FORM_CONFIGS.declarationCumUndertaking;
+
+  const {
+    approvalStatus,
+    isSubmitted,
+    canEdit,
+    refreshApprovalStatus
+  } = useFormApproval({
+    formId: initialData?.id,
+    formType: 'declarationCumUndertaking',
+    formStatus: initialData?.status
+  });
 
   const { rows, addRow, handleInputChange, removeRow } = useTableRows<DeclarationCumUndertakingRow>(
     initialData?.details?.length ? initialData.details.map(d => ({ ...d })) : [createNewRow(1)],
     createNewRow
   );
-
-  useEffect(() => {
-    setIsSubmitted(initialData?.status === "SUBMITTED");
-    
-    if (initialData?.id && initialData?.status === "SUBMITTED") {
-      checkApprovalStatus();
-    }
-  }, [initialData]);
-
-  const checkApprovalStatus = async () => {
-    if (!initialData?.id) return;
-    
-    const result = await checkFormApprovalStatusAction(
-      initialData.id,
-      'declarationCumUndertaking'
-    );
-    
-    if (!result.error && result.hasRequest) {
-      setApprovalStatus({
-        hasRequest: true,
-        status: result.status,
-        requestId: result.requestId
-      });
-    }
-  };
-
-  const canEdit = () => {
-    if (!isSubmitted) return true;
-    return approvalStatus.hasRequest && approvalStatus.status === 'APPROVED';
-  };
 
   const handleSaveOrSubmit = async (status: "DRAFT" | "SUBMITTED") => {
     if (rows.length === 0) {
@@ -94,16 +69,32 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
       return;
     }
 
+    // Confirm resubmission
+    if (status === "SUBMITTED" && initialData?.id && !isSubmitted) {
+      const confirmed = confirm(
+        "⚠️ Important: Once you submit this form, it will be locked again.\n\n" +
+        "You will need to request a new approval to make any further changes.\n\n" +
+        "Do you want to proceed?"
+      );
+      
+      if (!confirmed) {
+        return;
+      }
+    }
+
     setIsPending(true);
-    const rowsToSubmit = rows.map(({ id, ...rest }) => rest);
+    const rowsToSubmit = rows.map(({ ...rest }) => rest);
     const result = await saveDeclarationCumUndertakingAction(rowsToSubmit, status, initialData?.id);
     setIsPending(false);
 
     if (result.error) {
       toast.error(result.error);
     } else {
-      toast.success(`Form successfully ${status === "DRAFT" ? "saved" : "submitted"}!`);
+      toast.success(result.message || `Form successfully ${status === "DRAFT" ? "saved" : "submitted"}!`);
+      
       if (status === "SUBMITTED") {
+        // Refresh approval status to clear any active approvals
+        refreshApprovalStatus();
         router.push("/dashboard");
       } else if (result.formId) {
         router.push(`/forms/declarationCumUndertaking/${result.formId}`);
@@ -134,31 +125,12 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      {/* Approval Status Alert */}
-      {approvalStatus.hasRequest && approvalStatus.status === 'PENDING' && (
-        <Alert className="border-yellow-200 bg-yellow-50">
-          <AlertCircle className="h-4 w-4 text-yellow-600" />
-          <AlertDescription className="text-yellow-800">
-            You have a pending approval request for this form. You can edit once the admin approves your request.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {approvalStatus.hasRequest && approvalStatus.status === 'APPROVED' && (
-        <Alert className="border-green-200 bg-green-50">
-          <AlertCircle className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-800">
-            Your request to edit this form has been approved. You can now make changes.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Submission status banner */}
-      {isSubmitted && !canEdit() && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 rounded-lg p-4 text-center font-medium">
-          <p>This form has been submitted and cannot be edited without approval.</p>
-        </div>
-      )}
+      {/* Approval Status Alerts */}
+      <ApprovalStatusAlerts
+        approvalStatus={approvalStatus}
+        isSubmitted={isSubmitted}
+        canEdit={canEdit()}
+      />
 
       {/* Header section */}
       <div className="flex justify-between items-start">
@@ -167,7 +139,7 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
           <p className="text-muted-foreground mt-1">{metadata.description}</p>
         </div>
         <div className="flex gap-2">
-          {session?.user && (
+          {session?.user && initialData?.id && (
             <Button
               variant="outline"
               onClick={() => setShowHistoryDialog(true)}
@@ -194,6 +166,22 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
           )}
         </div>
       </div>
+
+      {/* Warning for resubmission */}
+      {!isSubmitted && initialData?.id && canEdit() && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="font-semibold text-amber-900 mb-1">Important Notice</h4>
+              <p className="text-sm text-amber-800">
+                Your approval to edit this form is currently active. Once you submit the form, it will be locked again. 
+                You will need to request a new approval to make any further changes.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Declaration text */}
       <div className="prose prose-sm dark:prose-invert max-w-none p-4 border rounded-md bg-gray-50 dark:bg-gray-800/50">
@@ -222,7 +210,7 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
             <span>Collection Manager Name</span>
             <span>Employee ID</span>
             <span>Signature</span>
-            <span className="w-10"></span>
+            {canEdit() && <span className="w-10"></span>}
           </div>
           
           {/* Table Rows */}
@@ -254,15 +242,17 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
                   placeholder="Signature"
                   className="bg-white dark:bg-gray-900"
                 />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeRow(row.id)}
-                  disabled={!canEdit() || isPending || rows.length <= 1}
-                  title={rows.length <= 1 ? "At least one manager is required" : "Remove manager"}
-                >
-                  <Trash className="h-4 w-4 text-red-500" />
-                </Button>
+                {canEdit() && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeRow(row.id)}
+                    disabled={!canEdit() || isPending || rows.length <= 1}
+                    title={rows.length <= 1 ? "At least one manager is required" : "Remove manager"}
+                  >
+                    <Trash className="h-4 w-4 text-red-500" />
+                  </Button>
+                )}
               </div>
             ))
           )}
@@ -286,8 +276,24 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
             className="bg-rose-800 hover:bg-rose-900 text-white"
           >
             {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
-            Submit for Approval
+            {initialData?.id && !isSubmitted ? "Resubmit Form" : "Submit for Approval"}
           </Button>
+        </div>
+      )}
+
+      {/* Information banner for locked forms */}
+      {isSubmitted && !canEdit() && !approvalStatus.hasRequest && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="font-semibold text-blue-900 mb-1">Form Locked</h4>
+              <p className="text-sm text-blue-800">
+                This form has been submitted and is currently locked. To make changes, click &quot;Request Edit Access&quot; above.
+                Once approved, you can edit and resubmit the form.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -300,16 +306,16 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
             formType="declarationCumUndertaking"
             formId={initialData.id}
             onSuccess={() => {
-              checkApprovalStatus();
+              refreshApprovalStatus();
               router.refresh();
             }}
           />
           
           {session?.user && (
-            <FormHistoryDialog
+            <ApprovalHistoryDialog
               isOpen={showHistoryDialog}
               onClose={() => setShowHistoryDialog(false)}
-              userId={session.user.id}
+              formId={initialData.id}
               formType="declarationCumUndertaking"
               formTitle={metadata.title}
             />

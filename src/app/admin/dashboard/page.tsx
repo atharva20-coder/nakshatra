@@ -60,25 +60,25 @@ export default async function Page() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>User Management</CardTitle>
-              <Users className="h-6 w-6 text-gray-400" />
+              <CardTitle>Request/Approval Management</CardTitle>
+              <FileText className="h-6 w-6 text-gray-400" />
             </CardHeader>
             <CardContent>
-              <p className="text-gray-600 mb-4">View and manage all users in the system.</p>
-              <Link href="#user-table" className="text-rose-600 font-semibold hover:underline">
-                Go to User Table
+              <p className="text-gray-600 mb-4">View and manage all approvals</p>
+              <Link href="/admin/approvals" className="text-rose-600 font-semibold hover:underline">
+                Go to requests page
               </Link>
             </CardContent>
           </Card>
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Form Submissions</CardTitle>
-              <FileText className="h-6 w-6 text-gray-400" />
+              <CardTitle>Agency Activities</CardTitle>
+              <Users className="h-6 w-6 text-gray-400" />
             </CardHeader>
             <CardContent>
-              <p className="text-gray-600 mb-4">Review and manage all form submissions.</p>
+              <p className="text-gray-600 mb-4">Review and manage agencies.</p>
               <Link href="/admin/forms" className="text-rose-600 font-semibold hover:underline">
-                View All Forms
+                View All Agency Forms
               </Link>
             </CardContent>
           </Card>

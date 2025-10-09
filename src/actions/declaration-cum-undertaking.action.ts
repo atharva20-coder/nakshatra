@@ -6,6 +6,7 @@ import { SubmissionStatus } from "@/generated/prisma";
 import { headers } from 'next/headers';
 import { revalidatePath } from "next/cache";
 import { DeclarationCumUndertakingRow } from "@/types/forms";
+import { handleFormResubmissionAction } from "@/actions/approval-request.action";
 
 type DeclarationInput = Omit<DeclarationCumUndertakingRow, 'id'>[];
 
@@ -49,10 +50,17 @@ export async function saveDeclarationCumUndertakingAction(
         }
 
         let savedForm;
+        let wasResubmission = false;
 
         if (existingForm) {
-            if (existingForm.status === SubmissionStatus.SUBMITTED) {
-                return { error: "Cannot update a submitted form." };
+            // Check if this is a resubmission (DRAFT -> SUBMITTED for a form that was previously submitted)
+            if (existingForm.status === SubmissionStatus.DRAFT && status === "SUBMITTED" && formId) {
+                wasResubmission = true;
+            }
+
+            // Don't allow editing of truly submitted forms (those without active approval)
+            if (existingForm.status === SubmissionStatus.SUBMITTED && !formId) {
+                return { error: "Cannot edit a submitted form without approval." };
             }
 
             savedForm = await prisma.declarationCumUndertaking.update({
@@ -77,13 +85,23 @@ export async function saveDeclarationCumUndertakingAction(
             });
         }
 
+        // If this is a resubmission, close all approved requests
+        if (wasResubmission && savedForm.id) {
+            await handleFormResubmissionAction(savedForm.id, 'declarationCumUndertaking');
+        }
+
         revalidatePath("/dashboard");
         revalidatePath(`/forms/declarationCumUndertaking`);
         revalidatePath(`/forms/declarationCumUndertaking/${savedForm.id}`);
 
         return {
             success: true,
-            formId: savedForm.id
+            formId: savedForm.id,
+            message: wasResubmission 
+                ? "Form resubmitted successfully. It is now locked and you'll need a new approval for further changes." 
+                : status === "SUBMITTED" 
+                    ? "Form submitted successfully." 
+                    : "Draft saved successfully."
         };
     } catch (err) {
         console.error("Error saving Declaration Cum Undertaking:", err);
