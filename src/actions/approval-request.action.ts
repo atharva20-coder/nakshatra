@@ -3,9 +3,15 @@
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { ApprovalType, ApprovalStatus, UserRole, SubmissionStatus } from "@/generated/prisma";
+import { ApprovalType, ApprovalStatus, UserRole, SubmissionStatus, ActivityAction, NotificationType } from "@/generated/prisma";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { 
+  createNotificationAction, 
+  notifyAdminOfApprovalRequestAction,
+  notifyUserOfApprovalDecisionAction 
+} from "@/actions/notification.action";
+import { logActivityAction } from "@/actions/notification.action";
 
 export interface CreateApprovalRequestInput {
   formType: string;
@@ -62,12 +68,9 @@ async function updateFormStatusToDraft(formType: string, formId: string) {
 
 /**
  * Close all APPROVED requests for a form when it's resubmitted
- * This ensures the form locks again after resubmission
  */
 async function closeApprovedRequestsForForm(formId: string, formType: string, userId: string) {
   try {
-    // Archive all approved requests by updating their status to a "COMPLETED" state
-    // We'll mark them with a special admin response to track they were used
     await prisma.approvalRequest.updateMany({
       where: {
         formId: formId,
@@ -88,7 +91,7 @@ async function closeApprovedRequestsForForm(formId: string, formType: string, us
 }
 
 /**
- * Create an approval request for updating a submitted form
+ * Create an approval request
  */
 export async function createApprovalRequestAction(input: CreateApprovalRequestInput) {
   const headersList = await headers();
@@ -99,7 +102,6 @@ export async function createApprovalRequestAction(input: CreateApprovalRequestIn
   }
 
   try {
-    // Check if there's already a pending request for this form
     const existingRequest = await prisma.approvalRequest.findFirst({
       where: {
         userId: session.user.id,
@@ -125,6 +127,23 @@ export async function createApprovalRequestAction(input: CreateApprovalRequestIn
       }
     });
 
+    // Log activity
+    await logActivityAction(
+      ActivityAction.APPROVAL_REQUESTED,
+      input.formType,
+      `Requested approval to edit ${input.formType}`,
+      input.formId,
+      { reason: input.reason }
+    );
+
+    // Notify admins
+    await notifyAdminOfApprovalRequestAction(
+      approvalRequest.id,
+      session.user.id,
+      session.user.name,
+      input.formType
+    );
+
     revalidatePath("/dashboard");
     revalidatePath("/admin/approvals");
     revalidatePath(`/forms/${input.formType}/${input.formId}`);
@@ -137,7 +156,7 @@ export async function createApprovalRequestAction(input: CreateApprovalRequestIn
 }
 
 /**
- * Get all pending approval requests with filters (Admin only)
+ * Get all approval requests with filters (Admin only)
  */
 export async function getPendingApprovalRequestsAction(filters?: {
   userId?: string;
@@ -155,7 +174,6 @@ export async function getPendingApprovalRequestsAction(filters?: {
   try {
     const where: any = {};
 
-    // Apply filters
     if (filters?.status) {
       where.status = filters.status;
     } else {
@@ -201,7 +219,7 @@ export async function getPendingApprovalRequestsAction(filters?: {
 }
 
 /**
- * Get approval requests for current user with their history
+ * Get approval requests for current user
  */
 export async function getMyApprovalRequestsAction() {
   const headersList = await headers();
@@ -225,9 +243,7 @@ export async function getMyApprovalRequestsAction() {
 }
 
 /**
- * Approve or reject an approval request (Admin only)
- * When approved, changes form status back to DRAFT and user can edit
- * When form is resubmitted, it locks again and approval is marked as used
+ * Process approval request (Admin only)
  */
 export async function processApprovalRequestAction(
   requestId: string,
@@ -243,7 +259,8 @@ export async function processApprovalRequestAction(
 
   try {
     const request = await prisma.approvalRequest.findUnique({
-      where: { id: requestId }
+      where: { id: requestId },
+      include: { user: true }
     });
 
     if (!request) {
@@ -254,7 +271,6 @@ export async function processApprovalRequestAction(
       return { error: "This request has already been processed" };
     }
 
-    // If approved, update the form status to DRAFT
     if (approved) {
       const formUpdated = await updateFormStatusToDraft(request.formType, request.formId);
       
@@ -263,7 +279,6 @@ export async function processApprovalRequestAction(
       }
     }
 
-    // Update the approval request
     await prisma.approvalRequest.update({
       where: { id: requestId },
       data: {
@@ -278,6 +293,24 @@ export async function processApprovalRequestAction(
       }
     });
 
+    // Log activity
+    await logActivityAction(
+      approved ? ActivityAction.APPROVAL_GRANTED : ActivityAction.APPROVAL_REJECTED,
+      request.formType,
+      `${approved ? 'Approved' : 'Rejected'} approval request for ${request.formType} by ${request.user.name}`,
+      request.formId,
+      { adminResponse, reviewedBy: session.user.name }
+    );
+
+    // Notify user
+    await notifyUserOfApprovalDecisionAction(
+      request.userId,
+      approved,
+      request.formType,
+      request.formId,
+      adminResponse
+    );
+
     revalidatePath("/admin/approvals");
     revalidatePath("/dashboard");
     revalidatePath(`/forms/${request.formType}/${request.formId}`);
@@ -290,8 +323,7 @@ export async function processApprovalRequestAction(
 }
 
 /**
- * Handle form resubmission - closes approved requests and locks form
- * This should be called when a form is submitted (moved from DRAFT to SUBMITTED)
+ * Handle form resubmission
  */
 export async function handleFormResubmissionAction(formId: string, formType: string) {
   const headersList = await headers();
@@ -302,8 +334,24 @@ export async function handleFormResubmissionAction(formId: string, formType: str
   }
 
   try {
-    // Close all approved requests for this form
     await closeApprovedRequestsForForm(formId, formType, session.user.id);
+    
+    await logActivityAction(
+      ActivityAction.FORM_RESUBMITTED,
+      formType,
+      `Resubmitted ${formType} - Form is now locked`,
+      formId
+    );
+
+    await createNotificationAction(
+      session.user.id,
+      NotificationType.FORM_LOCKED,
+      "Form Locked",
+      `Your ${formType} has been resubmitted and is now locked. You'll need a new approval to make further changes.`,
+      `/forms/${formType}/${formId}`,
+      formId,
+      "form"
+    );
     
     return { success: true };
   } catch (error) {
@@ -313,7 +361,7 @@ export async function handleFormResubmissionAction(formId: string, formType: str
 }
 
 /**
- * Request supporting document from user (Admin only)
+ * Request document from user (Admin only)
  */
 export async function requestDocumentAction(
   requestId: string,
@@ -327,6 +375,14 @@ export async function requestDocumentAction(
   }
 
   try {
+    const request = await prisma.approvalRequest.findUnique({
+      where: { id: requestId }
+    });
+
+    if (!request) {
+      return { error: "Request not found" };
+    }
+
     await prisma.approvalRequest.update({
       where: { id: requestId },
       data: {
@@ -335,6 +391,16 @@ export async function requestDocumentAction(
         reviewedBy: session.user.id
       }
     });
+
+    await createNotificationAction(
+      request.userId,
+      NotificationType.DOCUMENT_REQUESTED,
+      "Document Requested",
+      message,
+      `/forms/${request.formType}/${request.formId}`,
+      requestId,
+      "approval_request"
+    );
 
     revalidatePath("/admin/approvals");
     revalidatePath("/dashboard");
@@ -347,7 +413,7 @@ export async function requestDocumentAction(
 }
 
 /**
- * Upload supporting document for approval request
+ * Upload supporting document
  */
 export async function uploadSupportingDocumentAction(
   requestId: string,
@@ -387,6 +453,14 @@ export async function uploadSupportingDocumentAction(
       }
     });
 
+    await logActivityAction(
+      ActivityAction.DOCUMENT_UPLOADED,
+      request.formType,
+      `Uploaded supporting document for approval request`,
+      request.formId,
+      { documentPath }
+    );
+
     revalidatePath("/dashboard");
     revalidatePath("/admin/approvals");
 
@@ -398,8 +472,7 @@ export async function uploadSupportingDocumentAction(
 }
 
 /**
- * Check if user has active approval (APPROVED status) that allows editing
- * Returns null if form is locked (no active approval)
+ * Check form approval status
  */
 export async function checkFormApprovalStatusAction(formId: string, formType: string) {
   const headersList = await headers();
@@ -410,7 +483,6 @@ export async function checkFormApprovalStatusAction(formId: string, formType: st
   }
 
   try {
-    // Find the most recent PENDING or APPROVED request
     const pendingRequest = await prisma.approvalRequest.findFirst({
       where: {
         userId: session.user.id,
@@ -432,7 +504,6 @@ export async function checkFormApprovalStatusAction(formId: string, formType: st
       };
     }
 
-    // Check for approved request that hasn't been used yet
     const approvedRequest = await prisma.approvalRequest.findFirst({
       where: {
         userId: session.user.id,
@@ -470,7 +541,7 @@ export async function checkFormApprovalStatusAction(formId: string, formType: st
 }
 
 /**
- * Get approval request history for a specific form
+ * Get form approval history
  */
 export async function getFormApprovalHistoryAction(formId: string, formType: string) {
   const headersList = await headers();
@@ -498,7 +569,7 @@ export async function getFormApprovalHistoryAction(formId: string, formType: str
 }
 
 /**
- * Get approval statistics for admin dashboard
+ * Get approval statistics (Admin only)
  */
 export async function getApprovalStatisticsAction() {
   const headersList = await headers();

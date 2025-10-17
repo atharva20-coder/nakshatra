@@ -55,9 +55,14 @@ model User {
   sessions                          Session[]
   approvalRequests                  ApprovalRequest[]
   monthlySubmissions                MonthlySubmission[]
+  
+  // NEW: Notifications and Activity Logs
+  notifications                     Notification[]
+  activityLogs                      ActivityLog[]
 
   @@map("users")
 }
+
 
 // Monthly Submissions Tracking
 model MonthlySubmission {
@@ -593,4 +598,77 @@ enum ApprovalStatus {
   APPROVED
   REJECTED
   REVISED
+}
+
+// Notifications System
+model Notification {
+  id            String              @id @default(uuid())
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  userId        String
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type          NotificationType
+  title         String
+  message       String
+  link          String?             // Optional link to related resource
+  
+  read          Boolean             @default(false)
+  readAt        DateTime?
+  
+  // Related entities
+  relatedId     String?             // ID of related form/request
+  relatedType   String?             // Type: 'form', 'approval', etc.
+  
+  @@map("notifications")
+  @@index([userId, read])
+  @@index([createdAt])
+}
+
+// Activity Logs
+model ActivityLog {
+  id            String        @id @default(uuid())
+  createdAt     DateTime      @default(now())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  action        ActivityAction
+  entityType    String        // form type or 'approval_request'
+  entityId      String?       // ID of the entity
+  
+  description   String
+  metadata      Json?         // Additional data (old values, new values, etc.)
+  
+  ipAddress     String?
+  userAgent     String?
+  
+  @@map("activity_logs")
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
+}
+
+// Enums
+enum NotificationType {
+  APPROVAL_REQUESTED      // When user requests approval
+  APPROVAL_APPROVED       // When admin approves request
+  APPROVAL_REJECTED       // When admin rejects request
+  DOCUMENT_REQUESTED      // When admin requests document
+  FORM_SUBMITTED          // When form is submitted
+  FORM_LOCKED             // When form is locked after resubmission
+  SYSTEM_ALERT            // System notifications
+}
+
+enum ActivityAction {
+  FORM_CREATED
+  FORM_UPDATED
+  FORM_SUBMITTED
+  FORM_RESUBMITTED
+  FORM_DELETED
+  APPROVAL_REQUESTED
+  APPROVAL_GRANTED
+  APPROVAL_REJECTED
+  DOCUMENT_UPLOADED
+  USER_LOGIN
+  USER_LOGOUT
+  SETTINGS_CHANGED
 }

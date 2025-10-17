@@ -5,6 +5,7 @@ import { ReturnButton } from "@/components/return-button";
 import { Input } from "@/components/ui/input";
 import { ChevronDown, Search, Menu, X } from "lucide-react";
 import Link from "next/link";
+import { NotificationBell } from "@/components/notification-bell";
 
 // Props for the header component
 interface PageHeaderProps {
@@ -228,6 +229,7 @@ export const PageHeader = ({ returnHref, returnLabel }: PageHeaderProps) => {
             <DropdownMenu label="Declarations" links={declarationLinks} />
             <DropdownMenu label="Registers" links={registerLinks} />
             <DropdownMenu label="Trackers" links={trackerLinks} />
+            <NotificationBell />
           </div>
 
           {/* Mobile Menu Button */}

@@ -21,6 +21,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 // ✨ NEW: Import the new component for managing branch details
 import { BranchDetailsManager } from "@/components/branch-details-manager";
+import { ActivityLogs } from "@/components/activity-logs";
 
 export default async function Page() {
   const headersList = await headers();
@@ -309,23 +310,13 @@ export default async function Page() {
 
           {/* === TAB: LOGS === */}
           <TabsContent value="logs">
-            <Card>
-              <CardHeader>
-                <CardTitle>Activity Logs</CardTitle>
-                <p className="text-muted-foreground text-sm mt-1">
-                  Track all actions performed by the user (form edits,
-                  submissions, approvals, etc.)
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="bg-gray-100 rounded-lg p-4 overflow-x-auto text-sm text-gray-700">
+            <div className="bg-gray-100 rounded-lg p-4 overflow-x-auto text-sm text-gray-700">
                   <h3 className="font-semibold mb-2">Session / Log Data</h3>
                   <code>
                     <pre>{JSON.stringify(session, null, 2)}</pre>
                   </code>
+                  <ActivityLogs />
                 </div>
-              </CardContent>
-            </Card>
           </TabsContent>
         </Tabs>
       </div>

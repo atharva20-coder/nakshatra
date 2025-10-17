@@ -2,11 +2,12 @@
 
 import { auth } from "@/lib/auth";
 import { prisma } from '@/lib/prisma';
-import { SubmissionStatus } from "@/generated/prisma";
+import { SubmissionStatus, ActivityAction, NotificationType } from "@/generated/prisma";
 import { headers } from 'next/headers';
 import { revalidatePath } from "next/cache";
 import { DeclarationCumUndertakingRow } from "@/types/forms";
 import { handleFormResubmissionAction } from "@/actions/approval-request.action";
+import { logActivityAction, createNotificationAction } from "@/actions/notification.action";
 
 type DeclarationInput = Omit<DeclarationCumUndertakingRow, 'id'>[];
 
@@ -51,11 +52,17 @@ export async function saveDeclarationCumUndertakingAction(
 
         let savedForm;
         let wasResubmission = false;
+        let actionType: ActivityAction;
 
         if (existingForm) {
             // Check if this is a resubmission (DRAFT -> SUBMITTED for a form that was previously submitted)
             if (existingForm.status === SubmissionStatus.DRAFT && status === "SUBMITTED" && formId) {
                 wasResubmission = true;
+                actionType = ActivityAction.FORM_RESUBMITTED;
+            } else if (status === "SUBMITTED") {
+                actionType = ActivityAction.FORM_SUBMITTED;
+            } else {
+                actionType = ActivityAction.FORM_UPDATED;
             }
 
             // Don't allow editing of truly submitted forms (those without active approval)
@@ -74,6 +81,7 @@ export async function saveDeclarationCumUndertakingAction(
                 },
             });
         } else {
+            actionType = ActivityAction.FORM_CREATED;
             savedForm = await prisma.declarationCumUndertaking.create({
                 data: {
                     userId: userId,
@@ -85,9 +93,39 @@ export async function saveDeclarationCumUndertakingAction(
             });
         }
 
+        // Log activity
+        await logActivityAction(
+            actionType,
+            'declarationCumUndertaking',
+            wasResubmission 
+                ? `Resubmitted Declaration Cum Undertaking - Form locked again`
+                : status === "SUBMITTED" 
+                    ? `Submitted Declaration Cum Undertaking`
+                    : `${existingForm ? 'Updated' : 'Created'} Declaration Cum Undertaking draft`,
+            savedForm.id,
+            { 
+                status: submissionStatus, 
+                managersCount: rows.length,
+                wasResubmission 
+            }
+        );
+
         // If this is a resubmission, close all approved requests
         if (wasResubmission && savedForm.id) {
             await handleFormResubmissionAction(savedForm.id, 'declarationCumUndertaking');
+        }
+
+        // Create notification for submission
+        if (status === "SUBMITTED" && !wasResubmission) {
+            await createNotificationAction(
+                userId,
+                NotificationType.FORM_SUBMITTED,
+                "Form Submitted",
+                `Your Declaration Cum Undertaking has been submitted successfully.`,
+                `/forms/declarationCumUndertaking/${savedForm.id}`,
+                savedForm.id,
+                "form"
+            );
         }
 
         revalidatePath("/dashboard");
@@ -178,6 +216,14 @@ export async function deleteDeclarationCumUndertakingAction(id: string) {
         await prisma.declarationCumUndertaking.delete({
             where: { id: id }
         });
+
+        // Log activity
+        await logActivityAction(
+            ActivityAction.FORM_DELETED,
+            'declarationCumUndertaking',
+            `Deleted Declaration Cum Undertaking draft`,
+            id
+        );
 
         revalidatePath("/dashboard");
         revalidatePath(`/forms/declarationCumUndertaking`);
