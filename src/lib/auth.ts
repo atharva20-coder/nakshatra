@@ -1,27 +1,37 @@
+// ============================================
+// auth.ts — Authentication Configuration
+// ============================================
+
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import {nextCookies} from "better-auth/next-js"
-import { admin, customSession, magicLink } from "better-auth/plugins"
-
+import { nextCookies } from "better-auth/next-js";
+import { admin, customSession, magicLink } from "better-auth/plugins";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, verifyPassword } from "@/lib/argon2";
 import { createAuthMiddleware, APIError } from "better-auth/api";
-import { getValidDomains, normalizeName} from "@/lib/utils";
+import { getValidDomains, normalizeName } from "@/lib/utils";
 import { UserRole } from "@/generated/prisma";
-import {ac, roles} from "@/lib/permissions"
+import { ac, roles } from "@/lib/permissions";
 import { sendEmailAction } from "@/actions/send-email.action";
 
 
+// ============================================
+// AUTH CONFIGURATION
+// ============================================
 const options = {
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
+
+  // --- Google OAuth setup ---
   socialProviders: {
     google: {
       clientId: String(process.env.GOOGLE_CLIENT_ID),
       clientSecret: String(process.env.GOOGLE_CLIENT_SECRET),
     },
   },
+
+  // --- Email + Password Authentication ---
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 8,
@@ -31,8 +41,10 @@ const options = {
       verify: verifyPassword,
     },
     requireEmailVerification: true,
-    resetPasswordTokenExpiresIn: 60 * 60, //Expires in 1 hour
-    sendResetPassword: async ({user, url}) => {
+    resetPasswordTokenExpiresIn: 60 * 60, // 1 hour
+
+    // Custom email for password reset
+    sendResetPassword: async ({ user, url }) => {
       await sendEmailAction({
         to: user.email,
         subject: "Reset your password",
@@ -40,16 +52,18 @@ const options = {
           description: "Click the button below to reset your password.",
           link: url,
         },
-      })
-    }
+      });
+    },
   },
+
+  // --- Email Verification Setup ---
   emailVerification: {
     sendOnSignUp: true,
-    expiresIn: 60 * 60, //Expires in 1 hour
-    autoSignInAfterVerification: true, //automatic login after verification
-    sendVerificationEmail: async ({user, url}) => {
-      const link = new URL(url)
-      link.searchParams.set("callbackURL", "/auth/verify")
+    expiresIn: 60 * 60, // 1 hour
+    autoSignInAfterVerification: true, // Auto-login after verification
+    sendVerificationEmail: async ({ user, url }) => {
+      const link = new URL(url);
+      link.searchParams.set("callbackURL", "/auth/verify");
 
       await sendEmailAction({
         to: user.email,
@@ -58,20 +72,23 @@ const options = {
           description: "Click the button below to verify your email address.",
           link: String(link),
         },
-      })
-    }
+      });
+    },
   },
+
+  // --- Global Middleware Hooks ---
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
-      if(ctx.path === "/sign-up/email"){
-        const email = String(ctx.body.email)
-        const domain = email.split("@")[1]
+      // Restrict email domains during sign-up
+      if (ctx.path === "/sign-up/email") {
+        const email = String(ctx.body.email);
+        const domain = email.split("@")[1];
 
         const VALID_DOMAINS = getValidDomains;
-        if(!VALID_DOMAINS().includes(domain)) {
-          throw new APIError("BAD_REQUEST",{
-            message: "Invalid domain. Please use a valid email domain."
-          })
+        if (!VALID_DOMAINS().includes(domain)) {
+          throw new APIError("BAD_REQUEST", {
+            message: "Invalid domain. Please use a valid email domain.",
+          });
         }
 
         return {
@@ -80,76 +97,122 @@ const options = {
             body: {
               ...ctx.body,
               name: normalizeName(ctx.body.name),
-            }
-          }
-        }
+            },
+          },
+        };
       }
-      if(ctx.path === "/sign-in/magic-link"){
+
+      // Normalize name before magic link login
+      if (ctx.path === "/sign-in/magic-link") {
         return {
           context: {
-            ...ctx, body: { ...ctx.body, name:  normalizeName(ctx.body.name)},
-          }
-        }
+            ...ctx,
+            body: { ...ctx.body, name: normalizeName(ctx.body.name) },
+          },
+        };
       }
-      
-      if(ctx.path === "/update-user"){
+
+      // Normalize name before user update
+      if (ctx.path === "/update-user") {
         return {
           context: {
-            ...ctx, body: { ...ctx.body, name: normalizeName(ctx.body.name) },
-          }
-        }
+            ...ctx,
+            body: { ...ctx.body, name: normalizeName(ctx.body.name) },
+          },
+        };
       }
-    })
+    }),
   },
+
+  // ============================================
+  // DATABASE HOOKS — Assign Role During User Creation
+  // ============================================
   databaseHooks: {
     user: {
       create: {
         before: async (user) => {
-          const adminEmails = process.env.ADMIN_EMAIL?.split(";")
-          // Check if email has axisbank.com domain
-          const isAxisBankEmail = user.email.endsWith("@axisbank.com")
-          
-          if(adminEmails?.includes(user.email) || isAxisBankEmail){
-            return { data: {...user, role: UserRole.ADMIN}}
+          // ✅ NEW ADDITIONS BELOW
+
+          // 1️⃣ Fetch allowed SUPER_ADMIN and ADMIN emails from .env
+          const superAdminEmails = process.env.SUPER_ADMIN_EMAILS?.split(";");
+          const adminEmails = process.env.ADMIN_EMAIL?.split(";");
+
+          // 2️⃣ Check if email belongs to Axis Bank (auto-admin)
+          const isAxisBankEmail = user.email.endsWith("@axisbank.com");
+
+          // 3️⃣ Assign roles based on email
+          if (superAdminEmails?.includes(user.email)) {
+            // 👑 Super Admin (highest privilege)
+            return { data: { ...user, role: UserRole.SUPER_ADMIN } };
           }
-          return {data: user}
-        }
-      }
-    }
+
+          if (adminEmails?.includes(user.email) || isAxisBankEmail) {
+            // 🧩 Regular Admin (or Axis Bank domain)
+            return { data: { ...user, role: UserRole.ADMIN } };
+          }
+
+          // 👤 Default user role
+          return { data: user };
+        },
+      },
+    },
   },
+
+  // --- Extend User Schema with Role Field ---
   user: {
     additionalFields: {
       role: {
-        type: ["USER", "ADMIN", "AUDITOR", "COLLECTION_MANAGER"] as Array<UserRole>,
+        type: [
+          "USER",
+          "ADMIN",
+          "AUDITOR",
+          "COLLECTION_MANAGER",
+          "SUPER_ADMIN",
+        ] as Array<UserRole>,
         input: false,
-      }
-    }
+      },
+    },
   },
+
+  // --- Session Configuration ---
   session: {
-    expiresIn: 30 * 24 * 60 *60, //Expiration time = 30 days
+    expiresIn: 30 * 24 * 60 * 60, // 30 days
     cookieCache: {
       enabled: true,
-      maxAge: 5 * 60, //5 min
-    }
+      maxAge: 5 * 60, // 5 minutes
+    },
   },
+
+  // --- Disable Account Linking ---
   account: {
     accountLinking: {
       enabled: false,
-    }
+    },
   },
+
+  // --- Advanced Config (Optional) ---
   advanced: {
     database: {
       generateId: false,
     },
   },
-  plugins: [nextCookies(),
+
+  // ============================================
+  // PLUGINS SECTION
+  // ============================================
+  plugins: [
+    nextCookies(),
+
+    // ✅ UPDATED: Include SUPER_ADMIN as a valid admin role
     admin({
       defaultRole: UserRole.USER,
-      adminRoles: [UserRole.ADMIN],
+      adminRoles: [UserRole.ADMIN, UserRole.SUPER_ADMIN], // <--- NEW ADDITION
       ac,
-      roles
+      roles,
     }),
-      magicLink({
+
+    // Magic Link plugin with custom email sender
+    magicLink({
       sendMagicLink: async ({ email, url }) => {
         await sendEmailAction({
           to: email,
@@ -162,12 +225,19 @@ const options = {
       },
     }),
   ],
-} satisfies BetterAuthOptions
+} satisfies BetterAuthOptions;
+
+
+// ============================================
+// EXPORT FINAL AUTH INSTANCE
+// ============================================
 
 export const auth = betterAuth({
   ...options,
   plugins: [
     ...(options.plugins ?? []),
+
+    // --- Custom Session to include user details and token ---
     customSession(async ({ user, session }) => {
       return {
         session: {

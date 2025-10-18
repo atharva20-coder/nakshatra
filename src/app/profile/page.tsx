@@ -19,9 +19,9 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-// ✨ NEW: Import the new component for managing branch details
 import { BranchDetailsManager } from "@/components/branch-details-manager";
 import { ActivityLogs } from "@/components/activity-logs";
+import { NotificationBell } from "@/components/notification-bell";
 
 export default async function Page() {
   const headersList = await headers();
@@ -29,24 +29,20 @@ export default async function Page() {
 
   if (!session) redirect("/auth/login");
 
+  const role = session.user.role;
 
   const isAgencyUser =
-    session.user.role === UserRole.USER ||
-    session.user.role === UserRole.COLLECTION_MANAGER;
+    role === UserRole.USER || role === UserRole.COLLECTION_MANAGER;
 
-  const isAdminUser = session.user.role === UserRole.ADMIN;
-
+  const isAdminUser = role === UserRole.ADMIN;
+  const isSuperAdmin = role === UserRole.SUPER_ADMIN;
+  const isAuditor = role === UserRole.AUDITOR;
+  const isCollectionManager = role === UserRole.COLLECTION_MANAGER;
 
   return (
     <div>
       {isAgencyUser && (
-        <PageHeader returnHref="/dashboard" returnLabel="Back to Dashboard" />
-      )}
-      {isAdminUser && (
-        <PageHeader
-          returnHref="/admin/dashboard"
-          returnLabel="Back to Admin Dashboard"
-        />
+        <PageHeader returnHref="/user/dashboard" returnLabel="Back to Dashboard" />
       )}
 
       <div className="px-6 py-12 container mx-auto max-w-6xl space-y-10">
@@ -55,20 +51,27 @@ export default async function Page() {
           <div>
             <h1 className="text-4xl font-bold text-neutral-800">Profile</h1>
             <p className="text-muted-foreground text-sm mt-1">
-              {isAdminUser
+              {isAdminUser || isSuperAdmin
                 ? "Manage your administrative details and supervisor information"
+                : isAuditor
+                ? "Review audit profile and permissions overview"
                 : "Manage your personal and agency details"}
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {isAdminUser && (
-              <Button
-                size="sm"
-                className="bg-rose-900 text-white hover:bg-rose-950 font-medium"
-                asChild
-              >
-                <Link href="/admin/dashboard">Admin Panel</Link>
-              </Button>
+            {(isAdminUser || isSuperAdmin) && (
+              <>
+                <Button
+                  size="sm"
+                  className="bg-rose-900 text-white hover:bg-rose-950 font-medium"
+                  asChild
+                >
+                  <Link href={isSuperAdmin ? "/super/dashboard" : "/admin/dashboard"}>
+                    {isSuperAdmin ? "Super Admin Panel" : "Admin Panel"}
+                  </Link>
+                </Button>
+                <NotificationBell />
+              </>
             )}
             <SignOutButton />
           </div>
@@ -76,46 +79,86 @@ export default async function Page() {
 
         {/* --- TABS SECTION --- */}
         <Tabs
-          defaultValue={isAdminUser ? "admin" : "agency"}
+          defaultValue={
+            isAdminUser || isSuperAdmin || isAuditor || isCollectionManager
+              ? "admin"
+              : "agency"
+          }
           className="space-y-8"
         >
           <TabsList
-            className={`grid ${
-              isAdminUser ? "grid-cols-2" : "grid-cols-3"
-            } w-full max-w-md mx-auto`}
+            className={`grid grid-cols-3 w-full max-w-md mx-auto`}
           >
-            {!isAdminUser && <TabsTrigger value="agency">Agency Details</TabsTrigger>}
-            {isAdminUser && <TabsTrigger value="admin">Admin Details</TabsTrigger>}
+            {!isAdminUser &&
+              !isSuperAdmin &&
+              !isAuditor &&
+              !isCollectionManager && (
+                <TabsTrigger value="agency">Agency Details</TabsTrigger>
+              )}
+            {(isAdminUser ||
+              isSuperAdmin ||
+              isAuditor ||
+              isCollectionManager) && (
+              <TabsTrigger value="admin">
+                {isSuperAdmin
+                  ? "Super Admin Details"
+                  : isAuditor
+                  ? "Auditor Details"
+                  : isCollectionManager
+                  ? "Collection Manager Details"
+                  : "Admin Details"}
+              </TabsTrigger>
+            )}
             <TabsTrigger value="account">Account Management</TabsTrigger>
             <TabsTrigger value="logs">Activity Logs</TabsTrigger>
           </TabsList>
 
-          {/* === TAB: ADMIN DETAILS === */}
-          {isAdminUser && (
+          {/* === TAB: ADMIN / SUPER_ADMIN / AUDITOR / COLLECTION_MANAGER === */}
+          {(isAdminUser ||
+            isSuperAdmin ||
+            isAuditor ||
+            isCollectionManager) && (
             <TabsContent value="admin" className="space-y-10">
               <section className="space-y-8">
                 <div className="pb-4 border-b">
                   <h2 className="text-3xl font-bold text-neutral-800">
-                    Admin Information
+                    {isSuperAdmin
+                      ? "Super Admin Information"
+                      : isAuditor
+                      ? "Auditor Information"
+                      : isCollectionManager
+                      ? "Collection Manager Information"
+                      : "Admin Information"}
                   </h2>
                   <p className="text-muted-foreground text-sm mt-1">
-                    Overview of your admin credentials and reporting structure.
+                    {isSuperAdmin
+                      ? "Overview of your system-level credentials and privileges."
+                      : isAuditor
+                      ? "Overview of your audit credentials and assigned reports."
+                      : isCollectionManager
+                      ? "Overview of your assigned collections and reporting authority."
+                      : "Overview of your admin credentials and reporting structure."}
                   </p>
                 </div>
 
+                {/* Basic Details Card */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Admin Employee Details</CardTitle>
+                    <CardTitle>
+                      {isSuperAdmin
+                        ? "Super Admin Details"
+                        : isAuditor
+                        ? "Auditor Details"
+                        : isCollectionManager
+                        ? "Collection Manager Details"
+                        : "Admin Employee Details"}
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <Label htmlFor="empId">Employee ID</Label>
-                        <Input
-                          id="empId"
-                        
-                          readOnly
-                        />
+                        <Input id="empId" placeholder="N/A" readOnly />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="name">Full Name</Label>
@@ -134,46 +177,8 @@ export default async function Page() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="phone">Contact Number</Label>
-                        <Input
-                          id="phone"
-                          
-                          readOnly
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Supervisor Details</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="supName">Supervisor Name</Label>
-                        <Input
-                          id="supName"
-                          
-                          readOnly
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="supEmail">Supervisor Email</Label>
-                        <Input
-                          id="supEmail"
-                          
-                          readOnly
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="supContact">Supervisor Contact</Label>
-                        <Input
-                          id="supContact"
-                          
-                          readOnly
-                        />
+                        <Label htmlFor="role">Role</Label>
+                        <Input id="role" value={role} readOnly />
                       </div>
                     </div>
                   </CardContent>
@@ -183,7 +188,7 @@ export default async function Page() {
           )}
 
           {/* === TAB: AGENCY DETAILS === */}
-          {!isAdminUser && (
+          {!isAdminUser && !isSuperAdmin && !isAuditor && !isCollectionManager && (
             <TabsContent value="agency" className="space-y-10">
               <section className="space-y-8">
                 <div className="pb-4 border-b">
@@ -261,13 +266,12 @@ export default async function Page() {
                     </CardContent>
                   </Card>
 
-                  {/* ✨ --- NEW: BRANCH DETAILS SECTION --- ✨ */}
+                  {/* --- BRANCH DETAILS --- */}
                   <Card>
                     <CardHeader>
                       <CardTitle>Branch Details</CardTitle>
                       <p className="text-sm text-muted-foreground pt-1">
-                        Add details for each branch office. If you don&apos;t have
-                        any branches, you can leave this section empty.
+                        Add details for each branch office. Leave blank if none.
                       </p>
                     </CardHeader>
                     <CardContent>
@@ -311,12 +315,12 @@ export default async function Page() {
           {/* === TAB: LOGS === */}
           <TabsContent value="logs">
             <div className="bg-gray-100 rounded-lg p-4 overflow-x-auto text-sm text-gray-700">
-                  <h3 className="font-semibold mb-2">Session / Log Data</h3>
-                  <code>
-                    <pre>{JSON.stringify(session, null, 2)}</pre>
-                  </code>
-                  <ActivityLogs />
-                </div>
+              <h3 className="font-semibold mb-2">Session / Log Data</h3>
+              <code>
+                <pre>{JSON.stringify(session, null, 2)}</pre>
+              </code>
+              <ActivityLogs />
+            </div>
           </TabsContent>
         </Tabs>
       </div>

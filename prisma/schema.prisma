@@ -574,6 +574,7 @@ model Verification {
 }
 
 enum UserRole {
+  SUPER_ADMIN
   USER
   ADMIN
   AUDITOR

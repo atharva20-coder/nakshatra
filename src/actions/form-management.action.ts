@@ -10,6 +10,7 @@ interface FormSubmissionSummary {
     id: string;
     status: SubmissionStatus;
     updatedAt: Date;
+    createdAt: Date;
     formType: string;
 }
 
@@ -33,9 +34,9 @@ export async function getFormSubmissionsAction(): Promise<{ submissions?: FormSu
       
       const userRelationField = formType === 'agencyVisits' ? 'agencyId' : 'userId';
       
-      const submissions: { id: string; status: SubmissionStatus; updatedAt: Date }[] = await prismaModel.findMany({
+      const submissions: { id: string; status: SubmissionStatus; createdAt: Date; updatedAt: Date }[] = await prismaModel.findMany({
         where: { [userRelationField]: userId },
-        select: { id: true, status: true, updatedAt: true },
+        select: { id: true, status: true, createdAt: true, updatedAt: true },
       });
       
       return submissions.map((s) => ({ ...s, formType }));
@@ -254,7 +255,7 @@ export async function getSubmissionsForUser(userId: string) {
             
             const submissions = await prismaModel.findMany({
                 where: { [userRelationField]: userId },
-                select: { id: true, status: true, updatedAt: true },
+                select: { id: true, status: true, createdAt: true, updatedAt: true },
             });
             
             // eslint-disable-next-line @typescript-eslint/no-explicit-any

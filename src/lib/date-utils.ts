@@ -41,9 +41,12 @@ export function getYearFromDate(dateString: string): number {
 /**
  * Group forms by month and year
  */
-export function groupFormsByMonth<T extends { createdAt: Date }>(forms: T[]) {
+export function groupFormsByMonth<T extends { createdAt?: Date }>(forms: T[]) {
   const grouped = forms.reduce((acc, form) => {
-    const date = form.createdAt;
+    if (!form.createdAt) {
+      return acc;
+    }
+    const date = new Date(form.createdAt);
     const year = date.getFullYear();
     const month = date.getMonth() + 1; // JavaScript months are 0-based
     
