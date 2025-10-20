@@ -75,9 +75,9 @@ export const TelephoneDeclarationForm = ({ initialData }: TelephoneDeclarationFo
     } else {
       toast.success(`Form successfully ${status === "DRAFT" ? "saved" : "submitted"}!`);
       if (status === "SUBMITTED") {
-        router.push("/dashboard");
+        router.push("/user/dashboard");
       } else if (result.formId) {
-        router.push(`/forms/telephoneDeclaration/${result.formId}`);
+        router.push(`/user/forms/telephoneDeclaration/${result.formId}`);
       }
       router.refresh();
     }
@@ -98,7 +98,7 @@ export const TelephoneDeclarationForm = ({ initialData }: TelephoneDeclarationFo
       toast.error(result.error);
     } else {
       toast.success("Form successfully deleted!");
-      router.push("/dashboard");
+      router.push("/user/dashboard");
       router.refresh();
     }
   };

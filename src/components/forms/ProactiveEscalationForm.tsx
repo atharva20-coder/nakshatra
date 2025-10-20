@@ -80,9 +80,9 @@ export const ProactiveEscalationForm = ({ initialData }: ProactiveEscalationForm
     } else {
       toast.success(`Form successfully ${status === "DRAFT" ? "saved" : "submitted"}!`);
       if (status === "SUBMITTED") {
-        router.push("/dashboard");
+        router.push("/user/dashboard");
       } else if (result.formId) {
-        router.push(`/forms/proactiveEscalation/${result.formId}`);
+        router.push(`/user/forms/proactiveEscalation/${result.formId}`);
       }
       router.refresh();
     }
@@ -103,7 +103,7 @@ export const ProactiveEscalationForm = ({ initialData }: ProactiveEscalationForm
       toast.error(result.error);
     } else {
       toast.success("Form successfully deleted!");
-      router.push("/dashboard");
+      router.push("/user/dashboard");
       router.refresh();
     }
   };

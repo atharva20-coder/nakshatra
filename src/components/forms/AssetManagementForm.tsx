@@ -58,9 +58,9 @@ export const AssetManagementForm = ({ initialData }: AssetManagementFormProps) =
       toast.success(`Form successfully ${status === "DRAFT" ? "saved" : "submitted"}!`);
       if (status === "SUBMITTED") {
         setIsSubmitted(true);
-        router.push("/dashboard");
+        router.push("/user/dashboard");
       } else if (result.formId) {
-        router.push(`/forms/assetManagement/${result.formId}`);
+        router.push(`/user/forms/assetManagement/${result.formId}`);
       }
       router.refresh();
     }
@@ -75,7 +75,7 @@ export const AssetManagementForm = ({ initialData }: AssetManagementFormProps) =
       toast.error(result.error);
     } else {
       toast.success("Draft deleted successfully");
-      router.push('/dashboard');
+      router.push('/user/dashboard');
       router.refresh();
     }
   }

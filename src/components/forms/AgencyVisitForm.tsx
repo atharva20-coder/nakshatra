@@ -71,9 +71,9 @@ export const AgencyVisitForm = ({ initialData }: AgencyVisitFormProps) => {
       toast.success(`Form successfully ${status === "DRAFT" ? "saved" : "submitted"}!`);
       if (status === "SUBMITTED") {
         setIsSubmitted(true);
-        router.push("/dashboard");
+        router.push("/user/dashboard");
       } else if (result.formId) {
-        router.push(`/forms/agencyVisits/${result.formId}`);
+        router.push(`/user/forms/agencyVisits/${result.formId}`);
       }
       router.refresh();
     }
@@ -88,7 +88,7 @@ export const AgencyVisitForm = ({ initialData }: AgencyVisitFormProps) => {
       toast.error(result.error);
     } else {
       toast.success("Draft deleted successfully");
-      router.push('/dashboard');
+      router.push('/user/dashboard');
       router.refresh();
     }
   };

@@ -86,7 +86,9 @@ export const ManpowerRegisterForm = ({ initialData }: ManpowerRegisterFormProps)
     } else {
       toast.success(`Form successfully ${status === "DRAFT" ? "saved" : "submitted"}!`);
       if (status === "SUBMITTED") {
-        router.push("/dashboard");
+        router.push("/user/dashboard");
+      } else if (result.formId) {
+        router.push(`/user/forms/manpowerRegister/${result.formId}`);
       } else if (result.formId) {
         router.push(`/forms/manpowerRegister/${result.formId}`);
       }
@@ -109,7 +111,7 @@ export const ManpowerRegisterForm = ({ initialData }: ManpowerRegisterFormProps)
       toast.error(result.error);
     } else {
       toast.success("Form successfully deleted!");
-      router.push("/dashboard");
+      router.push("/user/dashboard");
       router.refresh();
     }
   };

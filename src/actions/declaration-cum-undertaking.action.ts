@@ -1,3 +1,4 @@
+// src/actions/declaration-cum-undertaking-enhanced.action.ts
 "use server";
 
 import { auth } from "@/lib/auth";
@@ -7,9 +8,25 @@ import { headers } from 'next/headers';
 import { revalidatePath } from "next/cache";
 import { DeclarationCumUndertakingRow } from "@/types/forms";
 import { handleFormResubmissionAction } from "@/actions/approval-request.action";
-import { logActivityAction, createNotificationAction } from "@/actions/notification.action";
+import { createNotificationAction } from "@/actions/notification.action";
+import { logFormActivityAction } from "@/actions/activity-logging.action";
 
 type DeclarationInput = Omit<DeclarationCumUndertakingRow, 'id'>[];
+
+const MONTH_NAMES: Record<number, string> = {
+  1: 'January', 2: 'February', 3: 'March', 4: 'April',
+  5: 'May', 6: 'June', 7: 'July', 8: 'August',
+  9: 'September', 10: 'October', 11: 'November', 12: 'December'
+};
+
+function getMonthYearFromDate(date: Date) {
+  const month = date.getMonth() + 1;
+  const year = date.getFullYear();
+  return {
+    month: MONTH_NAMES[month],
+    year: year.toString()
+  };
+}
 
 export async function saveDeclarationCumUndertakingAction(
     rows: DeclarationInput,
@@ -39,35 +56,69 @@ export async function saveDeclarationCumUndertakingAction(
         }));
 
         let existingForm = null;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let oldData: any = null;
+        
         if (formId) {
             existingForm = await prisma.declarationCumUndertaking.findFirst({
                 where: { id: formId, userId: userId },
+                include: { collectionManagers: true }
             });
+            
+            // Store old data for comparison
+            if (existingForm) {
+                oldData = {
+                    status: existingForm.status,
+                    managersCount: existingForm.collectionManagers.length,
+                    managers: existingForm.collectionManagers.map(m => ({
+                        name: m.name,
+                        employeeId: m.employeeId,
+                        signature: m.signature
+                    }))
+                };
+            }
         } else {
-            // Find an existing draft to update
             existingForm = await prisma.declarationCumUndertaking.findFirst({
                 where: { userId: userId, status: SubmissionStatus.DRAFT },
+                include: { collectionManagers: true }
             });
+            
+            if (existingForm) {
+                oldData = {
+                    status: existingForm.status,
+                    managersCount: existingForm.collectionManagers.length,
+                    managers: existingForm.collectionManagers.map(m => ({
+                        name: m.name,
+                        employeeId: m.employeeId,
+                        signature: m.signature
+                    }))
+                };
+            }
         }
 
         let savedForm;
         let wasResubmission = false;
         let actionType: ActivityAction;
+        let actionDescription: string;
+
+        const newData = {
+            status: submissionStatus,
+            managersCount: rows.length,
+            managers: detailsToCreate
+        };
 
         if (existingForm) {
-            // Check if this is a resubmission (DRAFT -> SUBMITTED for a form that was previously submitted)
+            // Determine if this is a resubmission
             if (existingForm.status === SubmissionStatus.DRAFT && status === "SUBMITTED" && formId) {
                 wasResubmission = true;
                 actionType = ActivityAction.FORM_RESUBMITTED;
+                actionDescription = `Resubmitted Declaration Cum Undertaking after approval`;
             } else if (status === "SUBMITTED") {
                 actionType = ActivityAction.FORM_SUBMITTED;
+                actionDescription = `Submitted Declaration Cum Undertaking`;
             } else {
                 actionType = ActivityAction.FORM_UPDATED;
-            }
-
-            // Don't allow editing of truly submitted forms (those without active approval)
-            if (existingForm.status === SubmissionStatus.SUBMITTED && !formId) {
-                return { error: "Cannot edit a submitted form without approval." };
+                actionDescription = `Updated Declaration Cum Undertaking draft`;
             }
 
             savedForm = await prisma.declarationCumUndertaking.update({
@@ -79,9 +130,12 @@ export async function saveDeclarationCumUndertakingAction(
                         create: detailsToCreate,
                     }
                 },
+                include: { collectionManagers: true }
             });
         } else {
             actionType = ActivityAction.FORM_CREATED;
+            actionDescription = `Created Declaration Cum Undertaking`;
+            
             savedForm = await prisma.declarationCumUndertaking.create({
                 data: {
                     userId: userId,
@@ -89,26 +143,30 @@ export async function saveDeclarationCumUndertakingAction(
                     collectionManagers: {
                         create: detailsToCreate,
                     }
-                }
+                },
+                include: { collectionManagers: true }
             });
         }
 
-        // Log activity
-        await logActivityAction(
-            actionType,
-            'declarationCumUndertaking',
-            wasResubmission 
-                ? `Resubmitted Declaration Cum Undertaking - Form locked again`
-                : status === "SUBMITTED" 
-                    ? `Submitted Declaration Cum Undertaking`
-                    : `${existingForm ? 'Updated' : 'Created'} Declaration Cum Undertaking draft`,
-            savedForm.id,
-            { 
-                status: submissionStatus, 
+        // Get month and year
+        const { month, year } = getMonthYearFromDate(savedForm.createdAt);
+
+        // Log activity with detailed changes
+        await logFormActivityAction({
+            action: actionType,
+            entityType: 'declarationCumUndertaking',
+            description: actionDescription,
+            entityId: savedForm.id,
+            metadata: { 
+                status: submissionStatus,
                 managersCount: rows.length,
-                wasResubmission 
+                wasResubmission,
+                month,
+                year,
+                oldValues: oldData,
+                newValues: newData
             }
-        );
+        });
 
         // If this is a resubmission, close all approved requests
         if (wasResubmission && savedForm.id) {
@@ -116,21 +174,25 @@ export async function saveDeclarationCumUndertakingAction(
         }
 
         // Create notification for submission
-        if (status === "SUBMITTED" && !wasResubmission) {
+        if (status === "SUBMITTED") {
+            const notificationMessage = wasResubmission
+                ? `Your Declaration Cum Undertaking has been resubmitted for ${month} ${year}. The form is now locked.`
+                : `Your Declaration Cum Undertaking for ${month} ${year} has been submitted successfully.`;
+            
             await createNotificationAction(
                 userId,
-                NotificationType.FORM_SUBMITTED,
-                "Form Submitted",
-                `Your Declaration Cum Undertaking has been submitted successfully.`,
+                wasResubmission ? NotificationType.FORM_LOCKED : NotificationType.FORM_SUBMITTED,
+                wasResubmission ? "Form Resubmitted & Locked" : "Form Submitted",
+                notificationMessage,
                 `/forms/declarationCumUndertaking/${savedForm.id}`,
                 savedForm.id,
                 "form"
             );
         }
 
-        revalidatePath("/dashboard");
-        revalidatePath(`/forms/declarationCumUndertaking`);
-        revalidatePath(`/forms/declarationCumUndertaking/${savedForm.id}`);
+        revalidatePath("/user/dashboard");
+        revalidatePath(`/user/forms/declarationCumUndertaking`);
+        revalidatePath(`/user/forms/declarationCumUndertaking/${savedForm.id}`);
 
         return {
             success: true,
@@ -144,6 +206,58 @@ export async function saveDeclarationCumUndertakingAction(
     } catch (err) {
         console.error("Error saving Declaration Cum Undertaking:", err);
         return { error: "An unknown error occurred while saving the form" };
+    }
+}
+
+export async function deleteDeclarationCumUndertakingAction(id: string) {
+    const headersList = await headers();
+    const session = await auth.api.getSession({ headers: headersList });
+
+    if (!session) {
+        return { error: "Unauthorized: you must be logged in" };
+    }
+
+    try {
+        const form = await prisma.declarationCumUndertaking.findFirst({
+            where: {
+                id: id,
+                userId: session.user.id
+            },
+            include: { collectionManagers: true }
+        });
+
+        if (!form) {
+            return { error: "Form not found or you don't have permission to delete it." };
+        }
+
+        if (form.status === SubmissionStatus.SUBMITTED) {
+            return { error: "Cannot delete a submitted form." };
+        }
+
+        const { month, year } = getMonthYearFromDate(form.createdAt);
+
+        await prisma.declarationCumUndertaking.delete({
+            where: { id: id }
+        });
+
+        await logFormActivityAction({
+            action: ActivityAction.FORM_DELETED,
+            entityType: 'declarationCumUndertaking',
+            description: `Deleted Declaration Cum Undertaking draft`,
+            entityId: id,
+            metadata: {
+                month,
+                year,
+                managersCount: form.collectionManagers.length
+            }
+        });
+
+        revalidatePath("/user/dashboard");
+        revalidatePath(`/user/forms/declarationCumUndertaking`);
+        return { success: true };
+    } catch (error) {
+        console.error("Error deleting declaration cum undertaking:", error);
+        return { error: "An unknown error occurred while deleting the form" };
     }
 }
 
@@ -184,52 +298,5 @@ export async function getDeclarationById(id: string) {
     } catch (error) {
         console.error("Error fetching Declaration Cum Undertaking:", error);
         return null;
-    }
-}
-
-export async function deleteDeclarationCumUndertakingAction(id: string) {
-    const headersList = await headers();
-    const session = await auth.api.getSession({ headers: headersList });
-
-    if (!session) {
-        return { error: "Unauthorized: you must be logged in" };
-    }
-
-    try {
-        // First, find the form to verify ownership and check its status
-        const form = await prisma.declarationCumUndertaking.findFirst({
-            where: {
-                id: id,
-                userId: session.user.id
-            }
-        });
-
-        if (!form) {
-            return { error: "Form not found or you don't have permission to delete it." };
-        }
-
-        if (form.status === SubmissionStatus.SUBMITTED) {
-            return { error: "Cannot delete a submitted form." };
-        }
-
-        // Now, perform the delete operation
-        await prisma.declarationCumUndertaking.delete({
-            where: { id: id }
-        });
-
-        // Log activity
-        await logActivityAction(
-            ActivityAction.FORM_DELETED,
-            'declarationCumUndertaking',
-            `Deleted Declaration Cum Undertaking draft`,
-            id
-        );
-
-        revalidatePath("/dashboard");
-        revalidatePath(`/forms/declarationCumUndertaking`);
-        return { success: true };
-    } catch (error) {
-        console.error("Error deleting declaration cum undertaking:", error);
-        return { error: "An unknown error occurred while deleting the form" };
     }
 }

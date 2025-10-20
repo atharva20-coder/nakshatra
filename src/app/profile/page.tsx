@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BranchDetailsManager } from "@/components/branch-details-manager";
 import { ActivityLogs } from "@/components/activity-logs";
 import { NotificationBell } from "@/components/notification-bell";
+import { EnhancedActivityLogs } from "@/components/enhanced-activity-logs";
 
 export default async function Page() {
   const headersList = await headers();
@@ -319,7 +320,7 @@ export default async function Page() {
               <code>
                 <pre>{JSON.stringify(session, null, 2)}</pre>
               </code>
-              <ActivityLogs />
+              <EnhancedActivityLogs userId={session.user.id} isOwnProfile={true} />
             </div>
           </TabsContent>
         </Tabs>

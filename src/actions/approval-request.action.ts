@@ -272,11 +272,35 @@ export async function processApprovalRequestAction(
     }
 
     if (approved) {
+      // ✅ KEY FIX: Change form status to DRAFT
       const formUpdated = await updateFormStatusToDraft(request.formType, request.formId);
       
       if (!formUpdated) {
         return { error: "Failed to update form status. Please try again." };
       }
+
+      // Log the approval with enhanced details
+      await logActivityAction(
+        ActivityAction.APPROVAL_GRANTED,
+        request.formType,
+        `Admin approved edit request - Form unlocked for editing`,
+        request.formId,
+        { 
+          adminResponse, 
+          reviewedBy: session.user.name,
+          approvedBy: session.user.email,
+          previousStatus: 'SUBMITTED',
+          newStatus: 'DRAFT'
+        }
+      );
+    } else {
+      await logActivityAction(
+        ActivityAction.APPROVAL_REJECTED,
+        request.formType,
+        `Admin rejected edit request`,
+        request.formId,
+        { adminResponse, reviewedBy: session.user.name }
+      );
     }
 
     await prisma.approvalRequest.update({
@@ -285,7 +309,7 @@ export async function processApprovalRequestAction(
         status: approved ? ApprovalStatus.APPROVED : ApprovalStatus.REJECTED,
         adminResponse: adminResponse || (
           approved 
-            ? "Approved - Form status changed to DRAFT. You can now edit and resubmit. Note: Once you resubmit, the form will lock again and you'll need a new approval for further changes." 
+            ? "Approved - Form changed to DRAFT. You can now edit and resubmit." 
             : "Rejected"
         ),
         reviewedAt: new Date(),
@@ -293,16 +317,6 @@ export async function processApprovalRequestAction(
       }
     });
 
-    // Log activity
-    await logActivityAction(
-      approved ? ActivityAction.APPROVAL_GRANTED : ActivityAction.APPROVAL_REJECTED,
-      request.formType,
-      `${approved ? 'Approved' : 'Rejected'} approval request for ${request.formType} by ${request.user.name}`,
-      request.formId,
-      { adminResponse, reviewedBy: session.user.name }
-    );
-
-    // Notify user
     await notifyUserOfApprovalDecisionAction(
       request.userId,
       approved,

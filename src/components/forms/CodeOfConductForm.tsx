@@ -78,7 +78,7 @@ export const CodeOfConductForm = ({ initialData }: CodeOfConductFormProps) => {
         toast.error(result.error);
       } else {
         toast.success("Form deleted successfully");
-        router.push("/dashboard");
+        router.push("/user/dashboard");
       }
     } catch (error) {
       console.error("Error deleting form:", error);
@@ -123,9 +123,9 @@ export const CodeOfConductForm = ({ initialData }: CodeOfConductFormProps) => {
 
         if (status === "SUBMITTED") {
           setIsSubmitted(true);
-          router.push("/dashboard");
+          router.push("/user/dashboard");
         } else if (result.formId) {
-          router.push(`/forms/codeOfConduct/${result.formId}`);
+          router.push(`/user/forms/codeOfConduct/${result.formId}`);
         }
 
         router.refresh();

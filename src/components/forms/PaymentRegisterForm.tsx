@@ -78,9 +78,9 @@ export const PaymentRegisterForm = ({ initialData }: PaymentRegisterFormProps) =
     } else {
       toast.success(`Form successfully ${status === "DRAFT" ? "saved" : "submitted"}!`);
       if (status === "SUBMITTED") {
-        router.push("/dashboard");
+        router.push("/user/dashboard");
       } else if (result.formId) {
-        router.push(`/forms/paymentRegister/${result.formId}`);
+        router.push(`/user/forms/paymentRegister/${result.formId}`);
       }
       router.refresh();
     }
@@ -101,7 +101,7 @@ export const PaymentRegisterForm = ({ initialData }: PaymentRegisterFormProps) =
       toast.error(result.error);
     } else {
       toast.success("Form successfully deleted!");
-      router.push("/dashboard");
+      router.push("/user/dashboard");
       router.refresh();
     }
   };

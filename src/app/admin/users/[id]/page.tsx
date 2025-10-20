@@ -19,6 +19,7 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel";
 import { MonthlyFormCard } from "@/components/monthly-form-card";
+import { EnhancedActivityLogs } from "@/components/enhanced-activity-logs";
 
 interface UserProfilePageProps {
   params: Promise<{
@@ -145,11 +146,10 @@ export default async function UserProfilePage({ params }: UserProfilePageProps) 
           </CardContent>
         </Card>
         <div className="bg-gray-100 rounded-lg p-4 overflow-x-auto text-sm text-gray-700">
-                  <h3 className="font-semibold mb-2">Session / Log Data</h3>
-                  <code>
-                    <pre>{JSON.stringify(session, null, 2)}</pre>
-                  </code>
-                  <ActivityLogs />
+              <h3 className="font-semibold mb-2">Session / Log Data</h3>
+              <div className="mt-8">
+                <EnhancedActivityLogs userId={id} isOwnProfile={false} />
+              </div>
             </div>
       </div>
     </div>

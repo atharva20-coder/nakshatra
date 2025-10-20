@@ -95,9 +95,9 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
       if (status === "SUBMITTED") {
         // Refresh approval status to clear any active approvals
         refreshApprovalStatus();
-        router.push("/dashboard");
+        router.push("/user/dashboard");
       } else if (result.formId) {
-        router.push(`/forms/declarationCumUndertaking/${result.formId}`);
+        router.push(`/user/forms/declarationCumUndertaking/${result.formId}`);
       }
       router.refresh();
     }
@@ -118,7 +118,7 @@ export const DeclarationCumUndertakingForm = ({ initialData }: DeclarationCumUnd
       toast.error(result.error);
     } else {
       toast.success("Form successfully deleted!");
-      router.push("/dashboard");
+      router.push("/user/dashboard");
       router.refresh();
     }
   };

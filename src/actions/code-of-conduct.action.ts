@@ -105,9 +105,9 @@ export async function saveCodeOfConductAction(
     }
 
     // Revalidate all relevant paths
-    revalidatePath("/dashboard");
-    revalidatePath("/forms/codeOfConduct");
-    revalidatePath(`/forms/codeOfConduct/${savedForm.id}`);
+    revalidatePath("/user/dashboard");
+    revalidatePath("/user/forms/codeOfConduct");
+    revalidatePath(`/user/forms/codeOfConduct/${savedForm.id}`);
     
     return { 
       success: true,
@@ -184,8 +184,8 @@ export async function deleteCodeOfConductAction(id: string) {
       where: { id }
     });
 
-    revalidatePath("/dashboard");
-    revalidatePath("/forms/codeOfConduct");
+    revalidatePath("/user/dashboard");
+    revalidatePath("/user/forms/codeOfConduct");
     return { success: true };
   } catch (error) {
     console.error("Error deleting Code of Conduct:", error);

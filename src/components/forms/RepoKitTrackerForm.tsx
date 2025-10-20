@@ -43,7 +43,7 @@ export const RepoKitTrackerForm = ({ initialData }: RepoKitTrackerFormProps) => 
       toast.error(result.error);
     } else {
       toast.success(`Form successfully ${status === "DRAFT" ? "saved" : "submitted"}!`);
-      router.push("/dashboard");
+      router.push("/user/dashboard");
       router.refresh();
     }
   };
