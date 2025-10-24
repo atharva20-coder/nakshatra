@@ -1,156 +1,190 @@
+// src/app/auditor/users/[id]/page.tsx
 import { headers } from "next/headers";
-import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
+import { redirect } from "next/navigation";
+// Removed unused 'notFound' and 'Link'
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { UserRole } from "@/generated/prisma";
-import { getSubmissionsForUser } from "@/actions/form-management.action";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { UserRole, AuditStatus, Observation } from "@/generated/prisma";
+// Removed unused server actions
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ReturnButton } from "@/components/return-button";
-import { FORM_CONFIGS, FormType } from "@/types/forms";
-import { Mail, Shield, Calendar, CheckCircle } from "lucide-react";
-import { groupFormsByMonth, isCurrentMonth } from "@/lib/date-utils";
-import { ActivityLogs } from "@/components/activity-logs";
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from "@/components/ui/carousel";
-import { MonthlyFormCard } from "@/components/monthly-form-card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { FilePlus } from "lucide-react"; // Removed unused 'Eye' and 'ListChecks'
 
-interface UserProfilePageProps {
-  params: Promise<{
-    id: string;
-  }>;
+// --- PLACEHOLDER COMPONENTS ---
+// Removed unused props from placeholders
+const CreateAuditForm = () => (
+    <Card>
+        <CardHeader>
+            <CardTitle>Start New Audit</CardTitle>
+            <CardDescription>Fill in the details to begin a new audit for this agency.</CardDescription>
+        </CardHeader>
+        <CardContent>
+            {/* Form fields for auditDate, auditorName, auditorEmployeeId, location, remarks */}
+            {/* Pass agencyId, auditorId, firmId implicitly or explicitly to the action call */}
+            <p className="text-muted-foreground">[Form to create audit using createAuditAction - Needs Implementation]</p>
+            <Button disabled>Start Audit</Button>
+        </CardContent>
+    </Card>
+);
+
+const AddObservationForm = () => ( // Removed unused auditId prop
+     <Card>
+        <CardHeader>
+            <CardTitle>Add Observation</CardTitle>
+        </CardHeader>
+        <CardContent>
+            {/* Form fields for observationNumber, category, severity, description, evidenceRequired */}
+            {/* Pass auditId implicitly or explicitly to the action call */}
+            <p className="text-muted-foreground">[Form to add observation using addObservationAction - Needs Implementation]</p>
+            <Button disabled><FilePlus className="mr-2 h-4 w-4" /> Add Observation</Button>
+        </CardContent>
+    </Card>
+);
+
+const AuditObservationsList = ({ observations }: { observations: Observation[] }) => ( // Use Observation type
+    <Card>
+        <CardHeader>
+            <CardTitle>Observations</CardTitle>
+        </CardHeader>
+        <CardContent>
+            {observations.length === 0 ? (
+                <p className="text-muted-foreground">No observations added yet.</p>
+            ) : (
+                <ul className="space-y-3">
+                    {observations.map((obs) => ( // obs is now typed
+                        <li key={obs.id} className="border p-3 rounded-md">
+                            <div className="flex justify-between items-center">
+                                <span className="font-medium">{obs.observationNumber} - {obs.category}</span>
+                                <Badge variant={obs.severity === 'HIGH' || obs.severity === 'CRITICAL' ? 'destructive' : 'secondary'}>
+                                    {obs.severity}
+                                </Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-1">{obs.description}</p>
+                             <p className="text-xs text-muted-foreground mt-2">Status: {obs.status}</p>
+                            {/* Add link/button to view observation details if needed */}
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </CardContent>
+    </Card>
+);
+// --- END PLACEHOLDER COMPONENTS ---
+
+
+interface AuditorAgencyAuditPageProps {
+  params: {
+    id: string; // This is the Agency ID (User ID)
+  };
 }
 
-export default async function UserProfilePage({ params }: UserProfilePageProps) {
-  const { id } = await params;
+export default async function AuditorAgencyAuditPage({ params }: AuditorAgencyAuditPageProps) {
+  const agencyId = params.id;
   const headersList = await headers();
   const session = await auth.api.getSession({ headers: headersList });
 
-  if (!session || session.user.role !== UserRole.ADMIN) {
+  if (!session || session.user.role !== UserRole.AUDITOR) {
     redirect("/auth/login");
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: id },
+  // 1. Verify the auditor profile and get firm ID
+  const auditor = await prisma.auditor.findUnique({
+    where: { userId: session.user.id },
+    include: { firm: true },
   });
 
-  if (!user) {
-    notFound();
+  if (!auditor) {
+    return (
+        <div className="container mx-auto p-8 text-center">
+            <p className="text-red-600">Auditor profile not found.</p>
+            <ReturnButton href="/auditor/dashboard" label="Back to Dashboard" />
+        </div>
+    );
   }
+  const firmId = auditor.firmId;
 
-  const { submissions, error } = await getSubmissionsForUser(id);
+  // 2. Verify agency is assigned to this auditor's firm
+   const assignment = await prisma.agencyAssignment.findUnique({
+      where: {
+        agencyId_firmId: { agencyId, firmId },
+        isActive: true,
+      },
+       include: { agency: { select: { name: true, email: true } } }
+    });
 
-  if (error) {
-    return <div>Error loading submissions for this user.</div>;
-  }
+    if (!assignment) {
+        return (
+            <div className="container mx-auto p-8 text-center">
+                <p className="text-red-600">Agency not assigned to your firm or is inactive.</p>
+                <ReturnButton href="/auditor/dashboard" label="Back to Dashboard" />
+            </div>
+        );
+    }
+    const agency = assignment.agency;
 
-  const groupedSubmissions = groupFormsByMonth(submissions || []);
+   // 3. Find the most recent audit for this agency by this firm
+   const latestAudit = await prisma.audit.findFirst({
+       where: {
+           agencyId: agencyId,
+           firmId: firmId,
+       },
+       orderBy: { createdAt: 'desc' },
+       include: {
+           observations: { orderBy: { createdAt: 'desc' } }
+       }
+   });
 
-  const currentMonthSubmissions = groupedSubmissions.find(group => isCurrentMonth(new Date(group.year, group.month - 1)));
-  const historicalSubmissions = groupedSubmissions.filter(group => !isCurrentMonth(new Date(group.year, group.month - 1)));
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto max-w-5xl px-6 py-12 space-y-10">
+    <div className="min-h-screen bg-gray-100">
+      <div className="container mx-auto px-6 py-12 max-w-4xl space-y-8">
+        {/* Header */}
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-4xl font-bold text-neutral-800">{user.name}&apos;s Profile</h1>
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-3 text-gray-500">
-              <div className="flex items-center gap-2">
-                <Mail className="h-4 w-4" />
-                <span>{user.email}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Shield className="h-4 w-4" />
-                <span>{user.role}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                <span>Joined: {new Date(user.createdAt).toLocaleDateString()}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4" />
-                <span>Email Verified: {user.emailVerified ? 'Yes' : 'No'}</span>
-              </div>
-            </div>
+            <h1 className="text-3xl font-bold text-gray-800">
+              Audit: {agency.name}
+            </h1>
+            <p className="text-gray-600 mt-1">Agency Email: {agency.email}</p>
+            <p className="text-gray-600">Auditing Firm: {auditor.firm.name}</p>
           </div>
-          <ReturnButton href="/admin/forms" label="Back to Forms" />
+          <ReturnButton href="/auditor/dashboard" label="Back to Dashboard" />
         </div>
 
-        {currentMonthSubmissions && (
+        {/* Audit Details Section */}
+        {latestAudit ? (
           <Card>
             <CardHeader>
-              <CardTitle>Current Month&apos;s Submissions ({currentMonthSubmissions.monthName} {currentMonthSubmissions.year})</CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle>Current Audit (ID: ...{latestAudit.id.slice(-6)})</CardTitle>
+                 <Badge>{latestAudit.status}</Badge>
+              </div>
+              <CardDescription>
+                Started on: {new Date(latestAudit.auditDate).toLocaleDateString()} by {latestAudit.auditorName}
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <table className="min-w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Form Type</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Updated</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {currentMonthSubmissions.forms.map((form) => (
-                    <tr key={form.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {FORM_CONFIGS[form.formType as FormType]?.title || form.formType}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${form.status === 'DRAFT' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
-                          {form.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(form.updatedAt).toLocaleString()}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <Link href={`/forms/${form.formType}/${form.id}`} className="text-rose-600 hover:text-rose-900">
-                          View / Edit
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <CardContent className="space-y-6">
+               {latestAudit.location && <p className="text-sm"><strong>Location:</strong> {latestAudit.location}</p>}
+               {latestAudit.remarks && <p className="text-sm"><strong>Initial Remarks:</strong> {latestAudit.remarks}</p>}
+
+               <AuditObservationsList observations={latestAudit.observations} />
+
+               {latestAudit.status === AuditStatus.IN_PROGRESS && (
+                 <AddObservationForm /> // Removed auditId prop
+               )}
+
+                 {latestAudit.status === AuditStatus.IN_PROGRESS && (
+                    <div className="pt-4 border-t">
+                        <Button disabled>Complete Audit (Not Implemented)</Button>
+                    </div>
+                )}
             </CardContent>
           </Card>
+        ) : (
+          <CreateAuditForm /> // Removed props
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Submission History</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {historicalSubmissions && historicalSubmissions.length > 0 ? (
-              <Carousel className="w-full">
-                <CarouselContent>
-                  {historicalSubmissions.map(({ year, monthName, forms }) => (
-                    <CarouselItem key={`${year}-${monthName}`}>
-                      <MonthlyFormCard year={year} monthName={monthName} forms={forms} />
-                    </CarouselItem>
-                  ))}
-                </CarouselContent>
-                <CarouselPrevious />
-                <CarouselNext />
-              </Carousel>
-            ) : (
-              <p className="text-center text-gray-500 py-8">No historical submissions yet.</p>
-            )}
-          </CardContent>
-        </Card>
-        <div className="bg-gray-100 rounded-lg p-4 overflow-x-auto text-sm text-gray-700">
-                  <h3 className="font-semibold mb-2">Session / Log Data</h3>
-                  <code>
-                    <pre>{JSON.stringify(session, null, 2)}</pre>
-                  </code>
-                  <ActivityLogs />
-            </div>
       </div>
     </div>
   );

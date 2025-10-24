@@ -146,7 +146,7 @@ export default async function UserProfilePage({ params }: UserProfilePageProps) 
           </CardContent>
         </Card>
         <div className="bg-gray-100 rounded-lg p-4 overflow-x-auto text-sm text-gray-700">
-              <h3 className="font-semibold mb-2">Session / Log Data</h3>
+                  <h3 className="font-semibold mb-2">Session / Log Data</h3>
               <div className="mt-8">
                 <EnhancedActivityLogs userId={id} isOwnProfile={false} />
               </div>

@@ -1,3 +1,4 @@
+// src/app/super/dashboard/page.tsx
 import { DeleteUserButton, PlaceholderDeleteUserButton } from "@/components/delete-user-button";
 import { ReturnButton } from "@/components/return-button";
 import { UserRoleSelect } from "@/components/user-role-select";
@@ -6,7 +7,9 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, ShieldCheck, UserCheck } from "lucide-react";
+import { Button } from "@/components/ui/button"; // ✅ Added missing Button import
+import Link from "next/link";
+import { Users, ShieldCheck, UserCheck, Settings, LinkIcon } from "lucide-react";
 
 export default async function Page() {
   const headersList = await headers();
@@ -14,11 +17,12 @@ export default async function Page() {
     headers: headersList,
   });
 
+  // Redirect if no session
   if (!session) {
     redirect("/auth/login");
   }
 
-  // This page is strictly for SUPER_ADMINs
+  // Restrict access to SUPER_ADMINs only
   if (session.user.role !== "SUPER_ADMIN") {
     return (
       <div className="px-8 py-16 container mx-auto max-w-screen-lg space-y-8">
@@ -33,14 +37,13 @@ export default async function Page() {
     );
   }
 
+  // Fetch all users
   const { users } = await auth.api.listUsers({
     headers: headersList,
-    query: {
-      sortBy: "name",
-    },
+    query: { sortBy: "name" },
   });
 
-  // Sort users to push ADMINs to the bottom for better visibility of regular users
+  // Sort users: SUPER_ADMINs at bottom
   const sortedUsers = users.sort((a, b) => {
     if (a.role === "SUPER_ADMIN" && b.role !== "SUPER_ADMIN") return 1;
     if (a.role !== "SUPER_ADMIN" && b.role === "SUPER_ADMIN") return -1;
@@ -49,21 +52,49 @@ export default async function Page() {
 
   // Calculate user statistics
   const totalUsers = users.length;
-  const adminCount = users.filter(user => user.role === 'ADMIN' || user.role === 'SUPER_ADMIN').length;
+  const adminCount = users.filter(user => user.role === "ADMIN" || user.role === "SUPER_ADMIN").length;
   const standardUserCount = totalUsers - adminCount;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
       <div className="px-8 py-12 container mx-auto max-w-screen-xl">
+        {/* HEADER */}
         <div className="flex justify-between items-center mb-10">
           <div>
-            <h1 className="text-4xl font-bold text-slate-800 dark:text-slate-100">Super Admin Dashboard</h1>
-            <p className="text-lg text-slate-500 dark:text-slate-400 mt-1">Welcome back, {session.user.name}.</p>
+            <h1 className="text-4xl font-bold text-slate-800 dark:text-slate-100">
+              Super Admin Dashboard
+            </h1>
+            <p className="text-lg text-slate-500 dark:text-slate-400 mt-1">
+              Welcome back, {session.user.name}.
+            </p>
           </div>
           <ReturnButton href="/profile" label="Back to Profile" />
         </div>
 
-        {/* USER MANAGEMENT TABLE */}
+        {/* --- AUDIT MANAGEMENT CARD --- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Audit Management</CardTitle>
+              <Settings className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">Assign Audits</div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Assign agencies to specific auditing firms.
+              </p>
+              <Button size="sm" asChild>
+                <Link href="/super/audits">
+                  <LinkIcon className="mr-2 h-4 w-4" /> Go to Assignments
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+          {/* (Optional: add more cards here later) */}
+        </div>
+        {/* --- END AUDIT MANAGEMENT CARD --- */}
+
+        {/* --- USER MANAGEMENT TABLE --- */}
         <div id="user-table">
           <Card>
             <CardHeader>
@@ -86,7 +117,10 @@ export default async function Page() {
                   </thead>
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
                     {sortedUsers.map((user) => (
-                      <tr key={user.id} className="text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50">
+                      <tr
+                        key={user.id}
+                        className="text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50"
+                      >
                         <td className="px-4 py-3 font-mono text-xs">{user.id.slice(0, 8)}</td>
                         <td className="px-4 py-3">{user.name}</td>
                         <td className="px-4 py-3">{user.email}</td>
@@ -108,6 +142,7 @@ export default async function Page() {
             </CardContent>
           </Card>
         </div>
+        {/* --- END USER MANAGEMENT TABLE --- */}
       </div>
     </div>
   );

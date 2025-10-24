@@ -1,130 +1,159 @@
-import { DeleteUserButton, PlaceholderDeleteUserButton } from "@/components/delete-user-button";
-import { ReturnButton } from "@/components/return-button";
-import { UserRoleSelect } from "@/components/user-role-select";
-import { UserRole } from "@/generated/prisma";
-import { auth } from "@/lib/auth";
+// src/app/auditor/dashboard/page.tsx
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { auth } from "@/lib/auth";
+import { UserRole } from "@/generated/prisma";
+import { getAssignedAgenciesAction } from "@/actions/audit-management.action";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { ReturnButton } from "@/components/return-button";
+import { Users, Building2, Calendar, FileText, Plus } from "lucide-react"; // Added Plus
 
-export default async function Page() {
+export default async function AuditorDashboardPage() {
   const headersList = await headers();
-  const session = await auth.api.getSession({
-    headers: headersList,
-  });
+  const session = await auth.api.getSession({ headers: headersList });
 
-  if (!session) {
+  if (!session || session.user.role !== UserRole.AUDITOR) {
     redirect("/auth/login");
   }
 
-  if (session.user.role !== "ADMIN") {
+  const result = await getAssignedAgenciesAction();
+
+  if (result.error) {
     return (
-      <div className="px-8 py-16 container mx-auto max-w-screen-lg space-y-8">
-        <div className="space-y-8">
-          <ReturnButton href="/profile" label="Profile" />
-          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+      <div className="container mx-auto p-8">
+        <div className="text-center py-12">
+            <h1 className="text-2xl font-bold mb-4">Auditor Dashboard</h1>
+            <p className="text-red-600">{result.error}</p>
+            <ReturnButton href="/profile" label="Back to Profile" />
         </div>
-        <p className="p-2 rounded-md text-lg bg-rose-900 text-white font-bold">
-          FORBIDDEN
-        </p>
       </div>
     );
   }
 
-  const { users } = await auth.api.listUsers({
-    headers: headersList,
-    query: {
-      sortBy: "name",
-    },
-  });
-
-  const sortedUsers = users.sort((a, b) => {
-    if (a.role === "ADMIN" && b.role !== "ADMIN") return 1;
-    if (a.role !== "ADMIN" && b.role === "ADMIN") return -1;
-    return 0;
-  });
+  const { assignments, firm } = result;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="px-8 py-12 container mx-auto max-w-screen-xl">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="container mx-auto px-6 py-12 max-w-7xl">
+        {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-4xl font-bold text-gray-800">Admin Dashboard</h1>
-            <p className="text-lg text-gray-500">Welcome, {session.user.name}.</p>
+            <h1 className="text-4xl font-bold text-gray-800 dark:text-gray-100">
+              Auditor Dashboard
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-2">
+              Welcome, {session.user.name} • {firm?.name}
+            </p>
           </div>
           <ReturnButton href="/profile" label="Back to Profile" />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Request/Approval Management</CardTitle>
-              <FileText className="h-6 w-6 text-gray-400" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 mb-4">View and manage all approvals</p>
-              <Link href="/admin/approvals" className="text-rose-600 font-semibold hover:underline">
-                Go to requests page
-              </Link>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Assigned Agencies
+                  </p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                    {assignments?.length || 0}
+                  </p>
+                </div>
+                <Building2 className="h-12 w-12 text-blue-500" />
+              </div>
             </CardContent>
           </Card>
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Agency Activities</CardTitle>
-              <Users className="h-6 w-6 text-gray-400" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 mb-4">Review and manage agencies.</p>
-              <Link href="/admin/forms" className="text-rose-600 font-semibold hover:underline">
-                View All Agency Forms
-              </Link>
-            </CardContent>
-          </Card>
+           {/* Add more relevant stats cards here if needed, e.g., audits in progress, observations pending */}
+           <Card>
+             <CardContent className="p-6">
+               {/* Placeholder for another stat */}
+               <div className="flex items-center justify-between">
+                 <div>
+                   <p className="text-sm text-gray-600 dark:text-gray-400">Audits In Progress</p>
+                   <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">?</p> {/* Add logic later */}
+                 </div>
+                 <FileText className="h-12 w-12 text-green-500" />
+               </div>
+             </CardContent>
+           </Card>
+           <Card>
+             <CardContent className="p-6">
+                {/* Placeholder for another stat */}
+               <div className="flex items-center justify-between">
+                 <div>
+                   <p className="text-sm text-gray-600 dark:text-gray-400">Observations Added</p>
+                   <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">?</p> {/* Add logic later */}
+                 </div>
+                 <Calendar className="h-12 w-12 text-purple-500" />
+               </div>
+             </CardContent>
+           </Card>
         </div>
 
-        <div id="user-table">
-          <Card>
-            <CardHeader>
-              <CardTitle>All Users</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="w-full overflow-x-auto">
-                <table className="min-w-full whitespace-nowrap">
-                  <thead>
-                    <tr className="border-b text-sm text-left text-gray-500">
-                      <th className="px-4 py-3 font-medium">ID</th>
-                      <th className="px-4 py-3 font-medium">Name</th>
-                      <th className="px-4 py-3 font-medium">Email</th>
-                      <th className="px-4 py-3 font-medium text-center">Role</th>
-                      <th className="px-4 py-3 font-medium text-center">Actions</th>
+        {/* Assigned Agencies Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Agencies Assigned to {firm?.name}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {assignments && assignments.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-800">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Agency Name
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Email
+                      </th>
+                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Assigned On
+                      </th>
+                       <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y">
-                    {sortedUsers.map((user) => (
-                      <tr key={user.id} className="text-sm text-gray-700 hover:bg-gray-50">
-                        <td className="px-4 py-3 font-mono text-xs">{user.id.slice(0, 8)}</td>
-                        <td className="px-4 py-3">{user.name}</td>
-                        <td className="px-4 py-3">{user.email}</td>
-                        <td className="px-4 py-3 text-center">
-                          <UserRoleSelect userId={user.id} role={user.role as UserRole} />
+                  <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-900 dark:divide-gray-700">
+                    {assignments.map((assignment) => (
+                      <tr key={assignment.id}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{assignment.agency.name}</div>
                         </td>
-                        <td className="px-4 py-3 text-center">
-                          {user.role === "USER" ? (
-                            <DeleteUserButton userId={user.id} />
-                          ) : (
-                            <PlaceholderDeleteUserButton />
-                          )}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500 dark:text-gray-400">{assignment.agency.email}</div>
+                        </td>
+                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                          {new Date(assignment.assignedAt).toLocaleDateString()}
+                        </td>
+                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                           {/* Link to the agency-specific audit page */}
+                           <Button asChild variant="outline" size="sm">
+                             <Link href={`/auditor/users/${assignment.agency.id}`}>
+                                View / Start Audit
+                             </Link>
+                           </Button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            ) : (
+              <div className="text-center py-12">
+                <Users className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No agencies assigned</h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Agencies will appear here once assigned by a Super Admin.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
