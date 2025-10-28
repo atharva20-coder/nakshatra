@@ -111,8 +111,8 @@ export default async function UserProfilePage({ params }: UserProfilePageProps) 
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(form.updatedAt).toLocaleString()}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <Link href={`/forms/${form.formType}/${form.id}`} className="text-rose-600 hover:text-rose-900">
-                          View / Edit
+                        <Link href={`/adminForms/${form.formType}/${form.id}`} className="text-rose-600 hover:text-rose-900">
+                          View
                         </Link>
                       </td>
                     </tr>

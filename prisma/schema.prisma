@@ -798,11 +798,11 @@ model Penalty {
 // Enums
 enum UserRole {
   SUPER_ADMIN
-  USER // Represents Agency
+  USER
   ADMIN
-  AUDITING_FIRM
   AUDITOR
   COLLECTION_MANAGER
+  // Remove AUDITING_FIRM if it's still here
 }
 
 enum SubmissionStatus {

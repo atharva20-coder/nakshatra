@@ -86,3 +86,12 @@ export function isCurrentMonth(date: Date): boolean {
 export function formatDateToYYYYMMDD(date: Date): string {
   return date.toISOString().split('T')[0];
 }
+
+export function getMonthYearFromDate(date: Date) {
+  const month = date.getMonth() + 1;
+  const year = date.getFullYear();
+  return {
+    month: MONTH_NAMES[month as MonthNumber],
+    year: year.toString()
+  };
+}
