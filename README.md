@@ -21,6 +21,7 @@ Prior to E-Nakshatra, the oversight of hundreds of third-party agencies responsi
 
 E-Nakshatra replaces the legacy manual system with a secure, intuitive, and role-based digital portal. The platform digitizes the entire lifecycle of agency compliance and reporting.
 
+
 ### How It Helped The Bank
 
 * **Drastically Reduced Compliance Risk:** By mandating digital submissions through a structured, auditable platform, E-Nakshatra ensures that all required compliance activities are tracked, verified, and reported in real-time. This provides a robust defense against regulatory scrutiny.
@@ -33,6 +34,7 @@ E-Nakshatra replaces the legacy manual system with a secure, intuitive, and role
 The platform is equipped with a comprehensive suite of features tailored to the needs of the banking environment.
 
 * **Secure Authentication & Role-Based Access Control (RBAC):**
+
   * Multiple authentication methods: **Email/Password**, **Google OAuth**, and **Magic Links**.
   * Strict, permission-based roles: **ADMIN**, **AUDITOR**, **USER**, and **COLLECTION_MANAGER**.
   * Secure password hashing using the industry-standard **Argon2** algorithm.
@@ -49,6 +51,7 @@ The platform is equipped with a comprehensive suite of features tailored to the 
 * **Modern & Responsive User Experience:**
   * A clean, professional, and fully responsive UI built with **Tailwind CSS** and **shadcn/ui**.
   * Interactive tables for data entry and real-time feedback through toast notifications.
+
 
 ## 5. Technical Deep Dive & Architecture
 
@@ -70,14 +73,18 @@ E-Nakshatra is built on a modern, robust, and scalable technology stack, chosen 
 
 The application follows a monolithic architecture facilitated by Next.js, which simplifies development and deployment.
 
+
 1. **Client-Side (Browser):** The UI is rendered using React components. User interactions, such as filling out a form, trigger calls to Server Actions.
 2. **Server-Side (Next.js):**
+
     * **Server Actions (`/src/actions`):** These are the backbone of the application's backend logic. When a user submits a form, the corresponding Server Action is invoked.
     * **Authentication & Authorization:** The action first verifies the user's session and role using the `better-auth` library. Unauthorized requests are rejected immediately.
     * **Data Validation:** The incoming form data is validated.
     * **Database Interaction:** Validated data is then passed to the Prisma client, which performs the necessary database operations (create, update, delete).
     * **Revalidation:** Upon successful mutation, Next.js's `revalidatePath` function is called to update the cache and reflect the changes on the UI.
+
 3. **Database (PostgreSQL):** The database stores all application data, including users, sessions, and form submissions. The schema is defined and managed by Prisma.
+
 
 This architecture is not only secure and performant but also highly scalable, capable of handling the demands of a large banking environment.
 
