@@ -27,6 +27,9 @@ interface User {
   id: string;
   name: string;
   email: string;
+  // Note: The 'role' is filtered on the server, 
+  // so it doesn't strictly need to be in this client-side type
+  // unless you need it for other logic.
 }
 
 interface UserFormStatus {
@@ -135,7 +138,17 @@ export default function AdminFormsPage() {
     if (isInitial) setIsLoading(true); else setIsLoadingMore(true);
 
     try {
-      const res = await getUsersWithSubmissionStats(page, pageSize, searchQuery, selectedMonth, selectedYear);
+      // *** MODIFICATION HERE ***
+      // Pass UserRole.USER to the server action to filter results
+      const res = await getUsersWithSubmissionStats(
+        page, 
+        pageSize, 
+        searchQuery, 
+        selectedMonth, 
+        selectedYear, 
+        UserRole.USER // Filter by role
+      );
+      
       if (res.error) {
         if (!mountedRef.current) return;
         setError(res.error);
