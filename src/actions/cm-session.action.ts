@@ -1,27 +1,22 @@
 "use server";
 
+// 1. Import 'verify' from 'argon2' instead of 'bcrypt'
+import { verify } from "@node-rs/argon2";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ActivityAction, NotificationType, UserRole } from "@/generated/prisma";
 import { headers } from "next/headers";
-import { createNotificationAction } from "@/actions/notification.action";
-import { logFormActivityAction } from "@/actions/activity-logging.action";
-
-// Store temporary CM sessions in memory (in production, use Redis or similar)
-const cmSessionStore = new Map<string, {
-  cmUserId: string;
-  cmName: string;
-  cmEmail: string;
-  cmDesignation: string;
-  productTag: string;
-  agencyUserId: string;
-  agencyName: string;
-  loginTime: Date;
-  ipAddress: string;
-}>();
-
-// Session expires after 15 minutes of inactivity
-const CM_SESSION_TIMEOUT = 15 * 60 * 1000;
+import { createNotificationAction } from "@/actions/notification.action"; // Assuming this path
+import { logFormActivityAction } from "@/actions/activity-logging.action"; // Assuming this path
+import {
+  createCMSession,
+  getCMSession,
+  updateCMSessionActivity,
+  deleteCMSession,
+  getAgencyCMSessions,
+  generateSessionId,
+  CM_SESSION_TIMEOUT
+} from "@/lib/cm-session-store";
 
 interface CMLoginInput {
   email: string;
@@ -40,6 +35,7 @@ interface CMApprovalInput {
 
 /**
  * Collection Manager login on agency session
+ * IMPORTANT: This does NOT change the agency user's session
  */
 export async function cmLoginOnAgencySessionAction(input: CMLoginInput) {
   const headersList = await headers();
@@ -51,11 +47,15 @@ export async function cmLoginOnAgencySessionAction(input: CMLoginInput) {
   }
 
   try {
-    // Verify CM credentials
+    // 2. Reverted to querying 'accounts' relation for password
     const cmUser = await prisma.user.findUnique({
       where: { email: input.email },
       include: {
-        accounts: true
+        accounts: {
+          where: {
+            providerId: "credential"
+          }
+        }
       }
     });
 
@@ -63,40 +63,41 @@ export async function cmLoginOnAgencySessionAction(input: CMLoginInput) {
       return { error: "Invalid Collection Manager credentials" };
     }
 
-    // Verify password using better-auth
-    let isValidPassword = false;
-    try {
-      await auth.api.signInEmail({
-        body: {
-          email: input.email,
-          password: input.password
-        }
-      });
-      isValidPassword = true;
-    } catch {
+    // Find the credential account from the included relation
+    const credentialAccount = cmUser.accounts.find(acc => acc.providerId === "credential");
+    
+    // Check for password on the associated account model
+    if (!credentialAccount || !credentialAccount.password) {
+      return { error: "Invalid credentials setup" };
+    }
+
+    // 3. Use argon2.verify(hash, plaintext)
+    // Note: The argument order is DIFFERENT from bcrypt.compare(plaintext, hash)
+    const isValidPassword = await verify(credentialAccount.password, input.password);
+
+    if (!isValidPassword) {
       return { error: "Invalid email or password" };
     }
 
-    if (!isValidPassword) {
-      return { error: "Invalid password" };
-    }
+    // --- End of Fixes ---
 
     // Get IP address
     const header = headersList.get("x-forwarded-for");
     const ipAddress = header ? header.split(",")[0].trim() : "unknown";
 
-    // Create temporary CM session
-    const sessionId = `cm_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    // Create temporary CM session (completely separate from agency session)
+    const sessionId = generateSessionId();
     
-    cmSessionStore.set(sessionId, {
+    createCMSession(sessionId, {
       cmUserId: cmUser.id,
       cmName: cmUser.name,
       cmEmail: cmUser.email,
-      cmDesignation: "Collection Manager", // You can add this to user profile
+      cmDesignation: "Collection Manager",
       productTag: input.productTag,
       agencyUserId: agencySession.user.id,
       agencyName: agencySession.user.name,
       loginTime: new Date(),
+      lastActivity: new Date(),
       ipAddress
     });
 
@@ -113,7 +114,8 @@ export async function cmLoginOnAgencySessionAction(input: CMLoginInput) {
         agencyUserId: agencySession.user.id,
         agencyName: agencySession.user.name,
         ipAddress,
-        sessionId
+        sessionId,
+        note: "This is a temporary CM session - does not affect agency session"
       }
     });
 
@@ -137,13 +139,6 @@ export async function cmLoginOnAgencySessionAction(input: CMLoginInput) {
       sessionId,
       "cm_session"
     );
-
-    // Auto-logout after timeout
-    setTimeout(() => {
-      if (cmSessionStore.has(sessionId)) {
-        cmSessionStore.delete(sessionId);
-      }
-    }, CM_SESSION_TIMEOUT);
 
     return {
       success: true,
@@ -170,7 +165,7 @@ export async function cmLogoutFromAgencySessionAction(sessionId: string) {
     return { error: "No active agency session" };
   }
 
-  const cmSession = cmSessionStore.get(sessionId);
+  const cmSession = getCMSession(sessionId);
   
   if (!cmSession) {
     return { error: "Invalid or expired CM session" };
@@ -180,6 +175,10 @@ export async function cmLogoutFromAgencySessionAction(sessionId: string) {
   if (cmSession.agencyUserId !== agencySession.user.id) {
     return { error: "Session mismatch" };
   }
+
+  // Calculate session duration
+  const sessionDuration = Date.now() - cmSession.loginTime.getTime();
+  const durationMinutes = Math.floor(sessionDuration / 1000 / 60);
 
   // Log the logout
   await logFormActivityAction({
@@ -191,15 +190,42 @@ export async function cmLogoutFromAgencySessionAction(sessionId: string) {
       cmName: cmSession.cmName,
       agencyUserId: cmSession.agencyUserId,
       agencyName: cmSession.agencyName,
-      sessionDuration: Date.now() - cmSession.loginTime.getTime(),
-      sessionId
+      sessionDuration: sessionDuration,
+      sessionDurationMinutes: durationMinutes,
+      sessionId,
+      logoutType: "manual"
     }
   });
 
-  // Remove session
-  cmSessionStore.delete(sessionId);
+  // Notify both parties
+  await createNotificationAction(
+    cmSession.cmUserId,
+    NotificationType.SYSTEM_ALERT,
+    "Logged Out",
+    `You logged out from ${cmSession.agencyName}'s session after ${durationMinutes} minutes`,
+    undefined,
+    sessionId,
+    "cm_session"
+  );
 
-  return { success: true };
+  await createNotificationAction(
+    agencySession.user.id,
+    NotificationType.SYSTEM_ALERT,
+    "Collection Manager Logged Out",
+    `${cmSession.cmName} logged out`,
+    undefined,
+    sessionId,
+    "cm_session"
+  );
+
+  // Remove session
+  const deleted = deleteCMSession(sessionId);
+
+  return { 
+    success: deleted,
+    message: deleted ? "Logged out successfully" : "Session already expired",
+    sessionDuration: durationMinutes
+  };
 }
 
 /**
@@ -214,7 +240,7 @@ export async function cmApproveWithSessionAction(input: CMApprovalInput) {
   }
 
   // Verify CM session exists and is valid
-  const cmSession = cmSessionStore.get(input.cmSessionId);
+  const cmSession = getCMSession(input.cmSessionId);
   
   if (!cmSession) {
     return { error: "Collection Manager session expired. Please login again." };
@@ -223,13 +249,6 @@ export async function cmApproveWithSessionAction(input: CMApprovalInput) {
   // Verify the CM session belongs to this agency session
   if (cmSession.agencyUserId !== agencySession.user.id) {
     return { error: "Session mismatch. Invalid approval attempt." };
-  }
-
-  // Check session timeout
-  const sessionAge = Date.now() - cmSession.loginTime.getTime();
-  if (sessionAge > CM_SESSION_TIMEOUT) {
-    cmSessionStore.delete(input.cmSessionId);
-    return { error: "Collection Manager session has expired. Please login again." };
   }
 
   try {
@@ -265,9 +284,8 @@ export async function cmApproveWithSessionAction(input: CMApprovalInput) {
       }
     });
 
-    // Update session last activity time
-    cmSession.loginTime = new Date();
-    cmSessionStore.set(input.cmSessionId, cmSession);
+    // Update session last activity time (extends session)
+    updateCMSessionActivity(input.cmSessionId);
 
     return {
       success: true,
@@ -297,30 +315,27 @@ export async function checkCMSessionAction(sessionId: string) {
     return { active: false, error: "No agency session" };
   }
 
-  const cmSession = cmSessionStore.get(sessionId);
+  const cmSession = getCMSession(sessionId);
   
   if (!cmSession) {
-    return { active: false, error: "CM session not found" };
+    return { active: false, error: "CM session not found or expired" };
   }
 
   if (cmSession.agencyUserId !== agencySession.user.id) {
     return { active: false, error: "Session mismatch" };
   }
 
-  const sessionAge = Date.now() - cmSession.loginTime.getTime();
-  if (sessionAge > CM_SESSION_TIMEOUT) {
-    cmSessionStore.delete(sessionId);
-    return { active: false, error: "Session expired" };
-  }
-
+  // Calculate remaining time
+  const sessionAge = Date.now() - cmSession.lastActivity.getTime();
   const remainingTime = CM_SESSION_TIMEOUT - sessionAge;
+  const remainingMinutes = Math.floor(remainingTime / 1000 / 60);
 
   return {
     active: true,
     cmName: cmSession.cmName,
     cmEmail: cmSession.cmEmail,
     productTag: cmSession.productTag,
-    remainingMinutes: Math.floor(remainingTime / 1000 / 60)
+    remainingMinutes: remainingMinutes > 0 ? remainingMinutes : 0
   };
 }
 
@@ -335,16 +350,23 @@ export async function getActiveCMSessionsAction() {
     return { error: "Unauthorized" };
   }
 
-  const activeSessions = Array.from(cmSessionStore.entries())
-    .filter(([, session]) => session.agencyUserId === agencySession.user.id)
-    .map(([sessionId, session]) => ({
-      sessionId,
-      cmName: session.cmName,
-      cmEmail: session.cmEmail,
-      productTag: session.productTag,
-      loginTime: session.loginTime,
-      remainingMinutes: Math.floor((CM_SESSION_TIMEOUT - (Date.now() - session.loginTime.getTime())) / 1000 / 60)
-    }));
+  const activeSessions = getAgencyCMSessions(agencySession.user.id)
+    .map(({ sessionId, data }) => {
+      const sessionAge = Date.now() - data.lastActivity.getTime();
+      const remainingTime = CM_SESSION_TIMEOUT - sessionAge;
+      
+      return {
+        sessionId,
+        cmName: data.cmName,
+        cmEmail: data.cmEmail,
+        productTag: data.productTag,
+        loginTime: data.loginTime,
+        lastActivity: data.lastActivity,
+        remainingMinutes: Math.floor(remainingTime / 1000 / 60)
+      };
+    })
+    .filter(session => session.remainingMinutes > 0); // Only return active sessions
 
   return { success: true, sessions: activeSessions };
 }
+

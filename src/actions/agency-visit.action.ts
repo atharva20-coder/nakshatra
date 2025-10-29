@@ -331,3 +331,61 @@ export async function getAgencyVisitById(id: string) {
     return null;
   }
 }
+
+export async function getAgencyVisitByIdForAdmin(id: string) {
+    const headersList = await headers();
+    const session = await auth.api.getSession({ headers: headersList });
+
+    // Admin/Super Admin Check
+    if (!session || (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN")) {
+        console.log(`getAgencyVisitByIdForAdmin: Access denied for user ${session?.user?.id} with role ${session?.user?.role}. Required ADMIN or SUPER_ADMIN.`);
+        return null;
+    }
+
+    try {
+        console.log(`getAgencyVisitByIdForAdmin: Fetching form ${id} as Admin ${session.user.id}`);
+        const form = await prisma.agencyVisit.findFirst({
+            where: { id: id }, // No agencyId check for admin
+            include: {
+                details: true,
+                agency: { // Include the agency (user) details
+                    select: { id: true, name: true, email: true }
+                }
+            }
+        });
+
+        if (!form) {
+            console.log(`getAgencyVisitByIdForAdmin: Form ${id} not found.`);
+            return null;
+        }
+
+        console.log(`getAgencyVisitByIdForAdmin: Form ${id} found. Status: ${form.status}. Agency: ${form.agency?.name}`);
+        // Format details consistently
+        const formattedDetails = form.details.map(detail => ({
+            id: detail.id,
+            srNo: detail.srNo || "",
+            dateOfVisit: detail.dateOfVisit ? new Date(detail.dateOfVisit).toISOString().split('T')[0] : '',
+            employeeId: detail.employeeId || "",
+            employeeName: detail.employeeName || "",
+            mobileNo: detail.mobileNo || "",
+            branchLocation: detail.branchLocation || "",
+            product: detail.product || "",
+            bucketDpd: detail.bucketDpd || "",
+            timeIn: detail.timeIn || "",
+            timeOut: detail.timeOut || "",
+            signature: detail.signature || "",
+            purposeOfVisit: detail.purposeOfVisit || "",
+        }));
+
+        return {
+            id: form.id,
+            status: form.status,
+            // Include agency info in the return object
+            agencyInfo: form.agency ? { userId: form.agency.id, name: form.agency.name, email: form.agency.email } : undefined,
+            details: formattedDetails
+        };
+    } catch (error) {
+        console.error("getAgencyVisitByIdForAdmin: Error fetching Agency Visit:", error);
+        return null;
+    }
+}

@@ -186,3 +186,62 @@ export async function deletePaymentRegisterAction(id: string) {
     return { error: "An unknown error occurred while deleting the form" };
   }
 }
+
+export async function getPaymentRegisterByIdForAdmin(id: string) {
+    const headersList = await headers();
+    const session = await auth.api.getSession({ headers: headersList });
+
+    // Admin/Super Admin Check
+    if (!session || (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN")) {
+        console.log(`getPaymentRegisterByIdForAdmin: Access denied for user ${session?.user?.id} with role ${session?.user?.role}. Required ADMIN or SUPER_ADMIN.`);
+        return null;
+    }
+
+    try {
+        console.log(`getPaymentRegisterByIdForAdmin: Fetching form ${id} as Admin ${session.user.id}`);
+        const form = await prisma.paymentRegister.findFirst({
+            where: { id: id }, // No userId check for admin
+            include: {
+                details: true,
+                user: { // Include the user (agency) details
+                    select: { id: true, name: true, email: true }
+                }
+            }
+        });
+
+        if (!form) {
+            console.log(`getPaymentRegisterByIdForAdmin: Form ${id} not found.`);
+            return null;
+        }
+
+        console.log(`getPaymentRegisterByIdForAdmin: Form ${id} found. Status: ${form.status}. Agency: ${form.user?.name}`);
+        const formattedDetails = form.details.map(detail => ({
+            id: detail.id,
+            srNo: detail.srNo,
+            month: detail.month,
+            eReceiptNo: detail.eReceiptNo,
+            accountNo: detail.accountNo,
+            customerName: detail.customerName,
+            receiptAmount: String(detail.receiptAmount), // Convert Decimal to string
+            modeOfPayment: detail.modeOfPayment,
+            depositionDate: new Date(detail.depositionDate).toISOString().split('T')[0],
+            fosHhdId: detail.fosHhdId,
+            fosName: detail.fosName,
+            fosSign: detail.fosSign,
+            cmName: detail.cmName,
+            cmVerificationStatus: detail.cmVerificationStatus,
+            remarks: detail.remarks || "",
+        }));
+
+        return {
+            id: form.id,
+            status: form.status,
+            // Include agency info in the return object
+            agencyInfo: form.user ? { userId: form.user.id, name: form.user.name, email: form.user.email } : undefined,
+            details: formattedDetails
+        };
+    } catch (error) {
+        console.error("getPaymentRegisterByIdForAdmin: Error fetching Payment Register:", error);
+        return null;
+    }
+}

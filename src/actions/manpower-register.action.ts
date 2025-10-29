@@ -190,3 +190,64 @@ export async function deleteManpowerRegisterAction(id: string) {
     return { error: "An unknown error occurred while deleting the form" };
   }
 }
+
+export async function getManpowerRegisterByIdForAdmin(id: string) {
+    const headersList = await headers();
+    const session = await auth.api.getSession({ headers: headersList });
+
+    // Admin/Super Admin Check
+    if (!session || (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN")) {
+        console.log(`getManpowerRegisterByIdForAdmin: Access denied for user ${session?.user?.id} with role ${session?.user?.role}. Required ADMIN or SUPER_ADMIN.`);
+        return null;
+    }
+
+    try {
+        console.log(`getManpowerRegisterByIdForAdmin: Fetching form ${id} as Admin ${session.user.id}`);
+        const form = await prisma.agencyManpowerRegister.findFirst({
+            where: { id: id }, // No userId check for admin
+            include: {
+                details: true,
+                user: { // Include the user (agency) details
+                    select: { id: true, name: true, email: true }
+                }
+            }
+        });
+
+        if (!form) {
+            console.log(`getManpowerRegisterByIdForAdmin: Form ${id} not found.`);
+            return null;
+        }
+
+        console.log(`getManpowerRegisterByIdForAdmin: Form ${id} found. Status: ${form.status}. Agency: ${form.user?.name}`);
+        const formattedDetails = form.details.map(detail => ({
+            id: detail.id,
+            srNo: detail.srNo,
+            executiveCategory: detail.executiveCategory,
+            hhdIdOfFos: detail.hhdIdOfFos || "",
+            axisIdOfFos: detail.axisIdOfFos || "",
+            fosFullName: detail.fosFullName,
+            dateOfJoining: new Date(detail.dateOfJoining).toISOString().split('T')[0],
+            product: detail.product,
+            cocSigned: detail.cocSigned,
+            collectionManagerName: detail.collectionManagerName,
+            collectionManagerId: detail.collectionManagerId,
+            collectionManagerSign: detail.collectionManagerSign,
+            dateOfResignation: detail.dateOfResignation ? new Date(detail.dateOfResignation).toISOString().split('T')[0] : "",
+            idCardsIssuanceDate: detail.idCardsIssuanceDate ? new Date(detail.idCardsIssuanceDate).toISOString().split('T')[0] : "",
+            idCardReturnDate: detail.idCardReturnDate ? new Date(detail.idCardReturnDate).toISOString().split('T')[0] : "",
+            executiveSignature: detail.executiveSignature,
+            remarks: detail.remarks || "",
+        }));
+
+        return {
+            id: form.id,
+            status: form.status,
+            // Include agency info in the return object
+            agencyInfo: form.user ? { userId: form.user.id, name: form.user.name, email: form.user.email } : undefined,
+            details: formattedDetails
+        };
+    } catch (error) {
+        console.error("getManpowerRegisterByIdForAdmin: Error fetching Manpower Register:", error);
+        return null;
+    }
+}

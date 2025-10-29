@@ -277,3 +277,59 @@ export async function deleteRepoKitTrackerAction(id: string) {
     return { error: "An unknown error occurred while deleting the form." };
   }
 }
+
+export async function getRepoKitTrackerByIdForAdmin(id: string) {
+    const headersList = await headers();
+    const session = await auth.api.getSession({ headers: headersList });
+
+    // Admin/Super Admin Check
+    if (!session || (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN")) {
+        console.log(`getRepoKitTrackerByIdForAdmin: Access denied for user ${session?.user?.id} with role ${session?.user?.role}. Required ADMIN or SUPER_ADMIN.`);
+        return null;
+    }
+
+    try {
+        console.log(`getRepoKitTrackerByIdForAdmin: Fetching form ${id} as Admin ${session.user.id}`);
+        const form = await prisma.repoKitTracker.findFirst({
+            where: { id: id }, // No userId check for admin
+            include: {
+                details: true,
+                user: { // Include the user (agency) details
+                    select: { id: true, name: true, email: true }
+                }
+            }
+        });
+
+        if (!form) {
+            console.log(`getRepoKitTrackerByIdForAdmin: Form ${id} not found.`);
+            return null;
+        }
+
+        console.log(`getRepoKitTrackerByIdForAdmin: Form ${id} found. Status: ${form.status}. Agency: ${form.user?.name}`);
+        const formattedDetails = form.details.map(detail => ({
+            id: detail.id,
+            srNo: detail.srNo,
+            repoKitNo: detail.repoKitNo,
+            issueDateFromBank: detail.issueDateFromBank.toISOString().split('T')[0],
+            lanNo: detail.lanNo,
+            product: detail.product,
+            bucketDpd: detail.bucketDpd,
+            usedUnused: detail.usedUnused,
+            executiveSign: detail.executiveSign,
+            dateOfReturnToCo: detail.dateOfReturnToCo?.toISOString().split('T')[0] || "",
+            collectionManagerEmpId: detail.collectionManagerEmpId,
+            collectionManagerSign: detail.collectionManagerSign
+        }));
+
+        return {
+            id: form.id,
+            status: form.status,
+            // Include agency info in the return object
+            agencyInfo: form.user ? { userId: form.user.id, name: form.user.name, email: form.user.email } : undefined,
+            details: formattedDetails
+        };
+    } catch (error) {
+        console.error("getRepoKitTrackerByIdForAdmin: Error fetching Repo Kit Tracker:", error);
+        return null;
+    }
+}

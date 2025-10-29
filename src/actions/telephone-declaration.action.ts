@@ -170,3 +170,54 @@ export async function deleteTelephoneDeclarationAction(id: string) {
     return { error: "An unknown error occurred while deleting the form" };
   }
 }
+
+export async function getTelephoneDeclarationByIdForAdmin(id: string) {
+    const headersList = await headers();
+    const session = await auth.api.getSession({ headers: headersList });
+
+    // Admin/Super Admin Check
+    if (!session || (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN")) {
+        console.log(`getTelephoneDeclarationByIdForAdmin: Access denied for user ${session?.user?.id} with role ${session?.user?.role}. Required ADMIN or SUPER_ADMIN.`);
+        return null;
+    }
+
+    try {
+        console.log(`getTelephoneDeclarationByIdForAdmin: Fetching form ${id} as Admin ${session.user.id}`);
+        const form = await prisma.telephoneDeclaration.findFirst({
+            where: { id: id }, // No userId check for admin
+            include: {
+                details: true,
+                user: { // Include the user (agency) details
+                    select: { id: true, name: true, email: true }
+                }
+            }
+        });
+
+        if (!form) {
+            console.log(`getTelephoneDeclarationByIdForAdmin: Form ${id} not found.`);
+            return null;
+        }
+
+        console.log(`getTelephoneDeclarationByIdForAdmin: Form ${id} found. Status: ${form.status}. Agency: ${form.user?.name}`);
+        const formattedDetails = form.details.map(detail => ({
+            id: detail.id,
+            srNo: detail.srNo,
+            telephoneNo: detail.telephoneNo,
+            username: detail.username,
+            executiveCategory: detail.executiveCategory,
+            recordingLine: detail.recordingLine,
+            remarks: detail.remarks || "",
+        }));
+
+        return {
+            id: form.id,
+            status: form.status,
+            // Include agency info in the return object
+            agencyInfo: form.user ? { userId: form.user.id, name: form.user.name, email: form.user.email } : undefined,
+            details: formattedDetails
+        };
+    } catch (error) {
+        console.error("getTelephoneDeclarationByIdForAdmin: Error fetching Telephone Declaration:", error);
+        return null;
+    }
+}
