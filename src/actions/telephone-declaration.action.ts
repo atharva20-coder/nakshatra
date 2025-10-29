@@ -86,8 +86,7 @@ export async function saveTelephoneDeclarationAction(
       success: true,
       formId: savedForm.id
     };
-  } catch (err) {
-    console.error("Error saving Telephone Declaration:", err);
+  } catch {
     return { error: "An unknown error occurred while saving the form" };
   }
 }
@@ -128,8 +127,7 @@ export async function getTelephoneDeclarationById(id: string) {
         remarks: detail.remarks || "",
       }))
     };
-  } catch (error) {
-    console.error("Error fetching Telephone Declaration:", error);
+  } catch {
     return null;
   }
 }
@@ -165,8 +163,7 @@ export async function deleteTelephoneDeclarationAction(id: string) {
     revalidatePath("/dashboard");
     revalidatePath(`/forms/telephoneDeclaration`);
     return { success: true };
-  } catch (error) {
-    console.error("Error deleting Telephone Declaration:", error);
+  } catch {
     return { error: "An unknown error occurred while deleting the form" };
   }
 }
@@ -177,12 +174,10 @@ export async function getTelephoneDeclarationByIdForAdmin(id: string) {
 
     // Admin/Super Admin Check
     if (!session || (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN")) {
-        console.log(`getTelephoneDeclarationByIdForAdmin: Access denied for user ${session?.user?.id} with role ${session?.user?.role}. Required ADMIN or SUPER_ADMIN.`);
-        return null;
+      return null;
     }
 
     try {
-        console.log(`getTelephoneDeclarationByIdForAdmin: Fetching form ${id} as Admin ${session.user.id}`);
         const form = await prisma.telephoneDeclaration.findFirst({
             where: { id: id }, // No userId check for admin
             include: {
@@ -194,11 +189,9 @@ export async function getTelephoneDeclarationByIdForAdmin(id: string) {
         });
 
         if (!form) {
-            console.log(`getTelephoneDeclarationByIdForAdmin: Form ${id} not found.`);
             return null;
         }
 
-        console.log(`getTelephoneDeclarationByIdForAdmin: Form ${id} found. Status: ${form.status}. Agency: ${form.user?.name}`);
         const formattedDetails = form.details.map(detail => ({
             id: detail.id,
             srNo: detail.srNo,
@@ -216,8 +209,7 @@ export async function getTelephoneDeclarationByIdForAdmin(id: string) {
             agencyInfo: form.user ? { userId: form.user.id, name: form.user.name, email: form.user.email } : undefined,
             details: formattedDetails
         };
-    } catch (error) {
-        console.error("getTelephoneDeclarationByIdForAdmin: Error fetching Telephone Declaration:", error);
+    } catch{
         return null;
     }
 }

@@ -22,8 +22,6 @@ import { ApprovalHistoryDialog } from "@/components/approval-history-dialog";
 import { useSession } from "@/lib/auth-client";
 import { useFormApproval } from "@/hooks/use-form-approval";
 import { ApprovalStatusAlerts } from "@/components/forms/ApprovalStatusAlerts";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"; // Correct import
 
 // ** MODIFIED INTERFACE **
@@ -155,18 +153,7 @@ export const TelephoneDeclarationForm = ({ initialData, isAdminView = false }: T
         />
        )}
 
-       {isAdminView && initialData?.agencyInfo && (
-         <Card className="mb-4 bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700">
-            <CardHeader>
-              <CardTitle className="text-lg text-blue-800 dark:text-blue-300">Viewing Submission For:</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-blue-700 dark:text-blue-200 space-y-1">
-              <p><strong>Agency:</strong> {initialData.agencyInfo.name}</p>
-              <p><strong>Email:</strong> {initialData.agencyInfo.email}</p>
-               <p><strong>Status:</strong> <Badge variant={initialData.status === 'SUBMITTED' ? 'default' : 'secondary'} className={initialData.status === 'SUBMITTED' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}>{initialData.status}</Badge></p>
-            </CardContent>
-         </Card>
-       )}
+
 
       <div className="flex justify-between items-start">
         <div>
