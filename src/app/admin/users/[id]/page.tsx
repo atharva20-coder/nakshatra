@@ -9,6 +9,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ReturnButton } from "@/components/return-button";
 import { FORM_CONFIGS, FormType } from "@/types/forms";
 import { Mail, Shield, Calendar, CheckCircle } from "lucide-react";
+import { groupFormsByMonth, isCurrentMonth } from "@/lib/date-utils";
+import { ActivityLogs } from "@/components/activity-logs";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
+import { MonthlyFormCard } from "@/components/monthly-form-card";
+import { EnhancedActivityLogs } from "@/components/enhanced-activity-logs";
 
 interface UserProfilePageProps {
   params: Promise<{
@@ -17,7 +28,7 @@ interface UserProfilePageProps {
 }
 
 export default async function UserProfilePage({ params }: UserProfilePageProps) {
-  const { id } = await params; // Await the params promise here
+  const { id } = await params;
   const headersList = await headers();
   const session = await auth.api.getSession({ headers: headersList });
 
@@ -26,18 +37,23 @@ export default async function UserProfilePage({ params }: UserProfilePageProps) 
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: id }, // Use the resolved id
+    where: { id: id },
   });
 
   if (!user) {
     notFound();
   }
-  
-  const { submissions, error } = await getSubmissionsForUser(id); // Use the resolved id
 
-  if (error || !submissions) {
+  const { submissions, error } = await getSubmissionsForUser(id);
+
+  if (error) {
     return <div>Error loading submissions for this user.</div>;
   }
+
+  const groupedSubmissions = groupFormsByMonth(submissions || []);
+
+  const currentMonthSubmissions = groupedSubmissions.find(group => isCurrentMonth(new Date(group.year, group.month - 1)));
+  const historicalSubmissions = groupedSubmissions.filter(group => !isCurrentMonth(new Date(group.year, group.month - 1)));
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -58,7 +74,7 @@ export default async function UserProfilePage({ params }: UserProfilePageProps) 
                 <Calendar className="h-4 w-4" />
                 <span>Joined: {new Date(user.createdAt).toLocaleDateString()}</span>
               </div>
-               <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4" />
                 <span>Email Verified: {user.emailVerified ? 'Yes' : 'No'}</span>
               </div>
@@ -67,12 +83,12 @@ export default async function UserProfilePage({ params }: UserProfilePageProps) 
           <ReturnButton href="/admin/forms" label="Back to Forms" />
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Form Submissions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {submissions && submissions.length > 0 ? (
+        {currentMonthSubmissions && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Current Month&apos;s Submissions ({currentMonthSubmissions.monthName} {currentMonthSubmissions.year})</CardTitle>
+            </CardHeader>
+            <CardContent>
               <table className="min-w-full">
                 <thead className="bg-gray-50">
                   <tr>
@@ -83,7 +99,7 @@ export default async function UserProfilePage({ params }: UserProfilePageProps) 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {submissions.map((form) => (
+                  {currentMonthSubmissions.forms.map((form) => (
                     <tr key={form.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {FORM_CONFIGS[form.formType as FormType]?.title || form.formType}
@@ -95,21 +111,47 @@ export default async function UserProfilePage({ params }: UserProfilePageProps) 
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(form.updatedAt).toLocaleString()}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <Link href={`/forms/${form.formType}/${form.id}`} className="text-rose-600 hover:text-rose-900">
-                          View / Edit
+                        <Link href={`/admin/adminViewForms/${form.formType}/${form.id}`} className="text-rose-600 hover:text-rose-900">
+                          View
                         </Link>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Submission History</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {historicalSubmissions && historicalSubmissions.length > 0 ? (
+              <Carousel className="w-full">
+                <CarouselContent>
+                  {historicalSubmissions.map(({ year, monthName, forms }) => (
+                    <CarouselItem key={`${year}-${monthName}`}>
+                      <MonthlyFormCard year={year} monthName={monthName} forms={forms} />
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+                <CarouselPrevious />
+                <CarouselNext />
+              </Carousel>
             ) : (
-              <p className="text-center text-gray-500 py-8">This user has no submissions yet.</p>
+              <p className="text-center text-gray-500 py-8">No historical submissions yet.</p>
             )}
           </CardContent>
         </Card>
+        <div className="bg-gray-100 rounded-lg p-4 overflow-x-auto text-sm text-gray-700">
+                  <h3 className="font-semibold mb-2">Session / Log Data</h3>
+              <div className="mt-8">
+                <EnhancedActivityLogs userId={id} isOwnProfile={false} />
+              </div>
+            </div>
       </div>
     </div>
   );
 }
-

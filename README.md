@@ -21,7 +21,8 @@ Prior to E-Nakshatra, the oversight of hundreds of third-party agencies responsi
 
 E-Nakshatra replaces the legacy manual system with a secure, intuitive, and role-based digital portal. The platform digitizes the entire lifecycle of agency compliance and reporting.
 
-### How It Helped The Bank:
+
+### How It Helped The Bank
 
 * **Drastically Reduced Compliance Risk:** By mandating digital submissions through a structured, auditable platform, E-Nakshatra ensures that all required compliance activities are tracked, verified, and reported in real-time. This provides a robust defense against regulatory scrutiny.
 * **Increased Operational Efficiency by over 40% (Projected):** Automating form submissions, report generation, and user management is projected to save thousands of man-hours annually, allowing bank employees to focus on higher-value strategic tasks rather than administrative paperwork.
@@ -33,22 +34,24 @@ E-Nakshatra replaces the legacy manual system with a secure, intuitive, and role
 The platform is equipped with a comprehensive suite of features tailored to the needs of the banking environment.
 
 * **Secure Authentication & Role-Based Access Control (RBAC):**
-    * Multiple authentication methods: **Email/Password**, **Google OAuth**, and **Magic Links**.
-    * Strict, permission-based roles: **ADMIN**, **AUDITOR**, **USER**, and **COLLECTION_MANAGER**.
-    * Secure password hashing using the industry-standard **Argon2** algorithm.
-    * Automated email verification and secure password reset functionality.
+
+  * Multiple authentication methods: **Email/Password**, **Google OAuth**, and **Magic Links**.
+  * Strict, permission-based roles: **ADMIN**, **AUDITOR**, **USER**, and **COLLECTION_MANAGER**.
+  * Secure password hashing using the industry-standard **Argon2** algorithm.
+  * Automated email verification and secure password reset functionality.
 * **Comprehensive Form Management:**
-    * A suite of **14+ digital forms** covering all critical compliance and operational areas (e.g., Code of Conduct, Asset Management, Agency Visits).
-    * Ability for users to **save forms as drafts** and continue later.
-    * A formal **submission and approval workflow**.
-    * Centralized viewing and management of all submissions for Admins and Auditors.
+  * A suite of **14+ digital forms** covering all critical compliance and operational areas (e.g., Code of Conduct, Asset Management, Agency Visits).
+  * Ability for users to **save forms as drafts** and continue later.
+  * A formal **submission and approval workflow**.
+  * Centralized viewing and management of all submissions for Admins and Auditors.
 * **User & Agency Dashboards:**
-    * An intuitive dashboard for agency users to track their pending tasks, form statuses, and submission deadlines.
-    * A powerful **Admin Panel** for comprehensive user management, role assignment, and system oversight.
-    * Detailed user profiles showing personal information and a complete history of their form submissions.
+  * An intuitive dashboard for agency users to track their pending tasks, form statuses, and submission deadlines.
+  * A powerful **Admin Panel** for comprehensive user management, role assignment, and system oversight.
+  * Detailed user profiles showing personal information and a complete history of their form submissions.
 * **Modern & Responsive User Experience:**
-    * A clean, professional, and fully responsive UI built with **Tailwind CSS** and **shadcn/ui**.
-    * Interactive tables for data entry and real-time feedback through toast notifications.
+  * A clean, professional, and fully responsive UI built with **Tailwind CSS** and **shadcn/ui**.
+  * Interactive tables for data entry and real-time feedback through toast notifications.
+
 
 ## 5. Technical Deep Dive & Architecture
 
@@ -70,14 +73,18 @@ E-Nakshatra is built on a modern, robust, and scalable technology stack, chosen 
 
 The application follows a monolithic architecture facilitated by Next.js, which simplifies development and deployment.
 
-1.  **Client-Side (Browser):** The UI is rendered using React components. User interactions, such as filling out a form, trigger calls to Server Actions.
-2.  **Server-Side (Next.js):**
+
+1. **Client-Side (Browser):** The UI is rendered using React components. User interactions, such as filling out a form, trigger calls to Server Actions.
+2. **Server-Side (Next.js):**
+
     * **Server Actions (`/src/actions`):** These are the backbone of the application's backend logic. When a user submits a form, the corresponding Server Action is invoked.
     * **Authentication & Authorization:** The action first verifies the user's session and role using the `better-auth` library. Unauthorized requests are rejected immediately.
     * **Data Validation:** The incoming form data is validated.
     * **Database Interaction:** Validated data is then passed to the Prisma client, which performs the necessary database operations (create, update, delete).
     * **Revalidation:** Upon successful mutation, Next.js's `revalidatePath` function is called to update the cache and reflect the changes on the UI.
-3.  **Database (PostgreSQL):** The database stores all application data, including users, sessions, and form submissions. The schema is defined and managed by Prisma.
+
+3. **Database (PostgreSQL):** The database stores all application data, including users, sessions, and form submissions. The schema is defined and managed by Prisma.
+
 
 This architecture is not only secure and performant but also highly scalable, capable of handling the demands of a large banking environment.
 
@@ -85,7 +92,7 @@ This architecture is not only secure and performant but also highly scalable, ca
 
 The project follows the standard Next.js App Router structure, with a clear separation of concerns.
 
-### Project Structure
+### Directory Layout
 
 The project follows the standard Next.js App Router structure, with a clear separation of concerns.
 
@@ -107,8 +114,6 @@ The project follows the standard Next.js App Router structure, with a clear sepa
 └── /prisma/
     └── schema.prisma # The single source of truth for the database schema
 
-
-
 ## 6. Project Setup & Installation
 
 Follow these steps to set up the project locally for development.
@@ -121,19 +126,24 @@ Follow these steps to set up the project locally for development.
 
 ### Installation Steps
 
-1.  **Clone the repository:**
+1. **Clone the repository:**
+
     ```bash
     git clone [https://github.com/atharva20-coder/nakshatra.git](https://github.com/atharva20-coder/nakshatra.git)
     cd nakshatra
     ```
-2.  **Install dependencies:**
+
+2. **Install dependencies:**
+
     ```bash
     pnpm install
     # or
     npm install
     ```
-3.  **Set up environment variables:**
+
+3. **Set up environment variables:**
     Create a `.env` file in the root of the project and add the following variables. Replace the placeholder values with your actual credentials.
+
     ```env
     # Database URL (from your PostgreSQL provider like Neon or Supabase)
     DATABASE_URL="postgresql://user:password@host:port/database"
@@ -149,20 +159,27 @@ Follow these steps to set up the project locally for development.
     # Admin Email (semicolon-separated list for initial admin users)
     ADMIN_EMAIL="admin1@example.com;admin2@axisbank.com"
     ```
-4.  **Push the database schema:**
+
+4. **Push the database schema:**
     This command will sync your Prisma schema with your PostgreSQL database, creating all the necessary tables and relations.
+
     ```bash
     npx prisma db push
     ```
-5.  **Generate Prisma Client:**
+
+5. **Generate Prisma Client:**
     This step is usually handled automatically by the `dev` script, but you can run it manually.
+
     ```bash
     npx prisma generate
     ```
-6.  **Run the development server:**
+
+6. **Run the development server:**
+
     ```bash
     pnpm dev
     ```
+
     The application will be available at `http://localhost:3000`.
 
 ## 7. About the Author

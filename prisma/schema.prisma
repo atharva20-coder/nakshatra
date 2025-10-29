@@ -22,56 +22,66 @@ model Post {
 }
 
 model User {
-  id                                String                              @id @default(uuid())
-  createdAt                         DateTime
-  updatedAt                         DateTime
-  name                              String
-  email                             String                              @unique
-  emailVerified                     Boolean
-  image                             String?
-  role                              UserRole                            @default(USER)
-  banned                            Boolean?
-  banReason                         String?
-  banExpires                        DateTime?
-  accounts                          Account[]
-  
+  id                          String                              @id @default(uuid())
+  createdAt                   DateTime                            @default(now()) // Added default
+  updatedAt                   DateTime                            @updatedAt
+  name                        String
+  email                       String                              @unique
+  emailVerified               Boolean                             @default(false) // Added default
+  image                       String?
+  role                        UserRole                            @default(USER)
+  banned                      Boolean?                            @default(false) // Added default
+  banReason                   String?
+  banExpires                  DateTime?
+  accounts                    Account[]
+
   // Form Relations
-  codeOfConduct                     CodeOfConduct[]
-  declarationCumUndertaking         DeclarationCumUndertaking[]
-  agencyVisits                      AgencyVisit[]
-  monthlyCompliance                 MonthlyCompliance[]
-  assetManagement                   AssetManagement[]
-  telephoneDeclaration              TelephoneDeclaration[]
-  agencyManpowerRegister            AgencyManpowerRegister[]
-  productDeclaration                ProductDeclaration[]
-  agencyPenaltyMatrix               AgencyPenaltyMatrix[]
-  agencyTrainingTracker             AgencyTrainingTracker[]
-  proactiveEscalationTracker        ProactiveEscalationTracker[]
-  escalationDetails                 EscalationDetails[]
-  paymentRegister                   PaymentRegister[]
-  repoKitTracker                    RepoKitTracker[]
-  
-  posts                             Post[]
-  sessions                          Session[]
-  approvalRequests                  ApprovalRequest[]
-  monthlySubmissions                MonthlySubmission[]
+  codeOfConduct               CodeOfConduct[]
+  declarationCumUndertaking   DeclarationCumUndertaking[]
+  agencyVisits                AgencyVisit[]
+  monthlyCompliance           MonthlyCompliance[]
+  assetManagement             AssetManagement[]
+  telephoneDeclaration        TelephoneDeclaration[]
+  agencyManpowerRegister      AgencyManpowerRegister[]
+  productDeclaration          ProductDeclaration[]
+  agencyPenaltyMatrix         AgencyPenaltyMatrix[]
+  agencyTrainingTracker       AgencyTrainingTracker[]
+  proactiveEscalationTracker  ProactiveEscalationTracker[]
+  escalationDetails           EscalationDetails[]
+  paymentRegister             PaymentRegister[]
+  repoKitTracker              RepoKitTracker[]
+
+  posts                       Post[]
+  sessions                    Session[]
+  approvalRequests            ApprovalRequest[]
+  monthlySubmissions          MonthlySubmission[]
+
+  // Notifications and Activity Logs
+  notifications               Notification[]
+  activityLogs                ActivityLog[]
+
+  // NEW Auditor relations
+  auditor                     Auditor?
+  agencyAssignments           AgencyAssignment[]
+  auditsReceived              Audit[]                             @relation("AuditAgency") // Clarified relation name
+  penalties                   Penalty[]
 
   @@map("users")
 }
+
 
 // Monthly Submissions Tracking
 model MonthlySubmission {
   id            String           @id @default(uuid())
   userId        String
   user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   submittedAt   DateTime?
   autoSubmitted Boolean          @default(false)
   status        SubmissionStatus @default(DRAFT)
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
-  @@unique([userId])
+  @@unique([userId, createdAt]) // Changed unique constraint for monthly tracking
   @@map("monthly_submissions")
 }
 
@@ -84,7 +94,7 @@ model CodeOfConduct {
   user              User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   status            SubmissionStatus      @default(DRAFT)
   details           CodeOfConductDetail[]
-  
+
   @@map("code_of_conduct")
 }
 
@@ -95,7 +105,7 @@ model CodeOfConductDetail {
   date              DateTime
   conductId         String
   conduct           CodeOfConduct    @relation(fields: [conductId], references: [id], onDelete: Cascade)
-  
+
   @@map("code_of_conduct_details")
 }
 
@@ -107,9 +117,9 @@ model DeclarationCumUndertaking {
   userId                      String
   user                        User                              @relation(fields: [userId], references: [id], onDelete: Cascade)
   status                      SubmissionStatus                  @default(DRAFT)
-  
+
   collectionManagers          DeclarationCollectionManager[]
-  
+
   @@map("declaration_cum_undertaking")
 }
 
@@ -120,11 +130,11 @@ model DeclarationCollectionManager {
   signature             String
   declarationId         String
   declaration           DeclarationCumUndertaking @relation(fields: [declarationId], references: [id], onDelete: Cascade)
-  
+
   @@map("declaration_collection_managers")
 }
 
-// 3. Agency Visit Details (Already implemented, keeping for consistency)
+// 3. Agency Visit Details
 model AgencyVisit {
   id        String           @id @default(uuid())
   createdAt DateTime         @default(now())
@@ -140,15 +150,15 @@ model AgencyVisit {
 model VisitDetail {
   id             String      @id @default(uuid())
   srNo           String
-  dateOfVisit    String
+  dateOfVisit    String // Consider changing to DateTime if precision needed
   employeeId     String
   employeeName   String
   mobileNo       String
   branchLocation String
   product        String
   bucketDpd      String
-  timeIn         String
-  timeOut        String
+  timeIn         String // Consider changing to DateTime
+  timeOut        String // Consider changing to DateTime
   signature      String
   purposeOfVisit String
   visitId        String
@@ -228,12 +238,12 @@ model TelephoneDeclaration {
 }
 
 model TelephoneDetail {
-  id                    String              @id @default(uuid())
+  id                    String               @id @default(uuid())
   srNo                  String
   telephoneNo           String
   username              String
   executiveCategory     String
-  recordingLine         String              // Yes/No
+  recordingLine         String               // Yes/No
   remarks               String?
   telephoneDeclarationId String
   telephoneDeclaration  TelephoneDeclaration @relation(fields: [telephoneDeclarationId], references: [id], onDelete: Cascade)
@@ -255,25 +265,25 @@ model AgencyManpowerRegister {
 }
 
 model ManpowerDetail {
-  id                      String                 @id @default(uuid())
+  id                      String                  @id @default(uuid())
   srNo                    String
-  executiveCategory       String                 // FOS/Tele-caller/Tracer/Backend
-  hhdIdOfFos             String?
-  axisIdOfFos            String?
-  fosFullName            String
-  dateOfJoining          DateTime
-  product                String
-  cocSigned              String                 // Yes/No
-  collectionManagerName  String
-  collectionManagerId    String
-  collectionManagerSign  String
-  dateOfResignation      DateTime?
-  idCardsIssuanceDate    DateTime?
-  idCardReturnDate       DateTime?
-  executiveSignature     String
-  remarks                String?
-  manpowerRegisterId     String
-  manpowerRegister       AgencyManpowerRegister @relation(fields: [manpowerRegisterId], references: [id], onDelete: Cascade)
+  executiveCategory       String                  // FOS/Tele-caller/Tracer/Backend
+  hhdIdOfFos              String?
+  axisIdOfFos             String?
+  fosFullName             String
+  dateOfJoining           DateTime
+  product                 String
+  cocSigned               String                  // Yes/No
+  collectionManagerName   String
+  collectionManagerId     String
+  collectionManagerSign   String
+  dateOfResignation       DateTime?
+  idCardsIssuanceDate     DateTime?
+  idCardReturnDate        DateTime?
+  executiveSignature      String
+  remarks                 String?
+  manpowerRegisterId      String
+  manpowerRegister        AgencyManpowerRegister @relation(fields: [manpowerRegisterId], references: [id], onDelete: Cascade)
 
   @@map("manpower_details")
 }
@@ -292,7 +302,7 @@ model ProductDeclaration {
 }
 
 model ProductDetail {
-  id                        String             @id @default(uuid())
+  id                        String              @id @default(uuid())
   product                   String
   bucket                    String
   countOfCaseAllocated      Int
@@ -319,12 +329,12 @@ model AgencyPenaltyMatrix {
 }
 
 model PenaltyDetail {
-  id                          String              @id @default(uuid())
+  id                          String                @id @default(uuid())
   noticeRefNo                 String
   nonComplianceMonth          String
   parameter                   String
   product                     String
-  penaltyAmount               Decimal
+  penaltyAmount               Decimal               @db.Decimal(10, 2) // Added precision
   penaltyDeductedMonth        String
   correctiveActionTaken       String
   agency                      String
@@ -350,7 +360,7 @@ model AgencyTrainingTracker {
 }
 
 model TrainingDetail {
-  id                  String                @id @default(uuid())
+  id                  String                 @id @default(uuid())
   dateOfTraining      DateTime
   trainingAgenda      String
   trainingName        String
@@ -378,13 +388,13 @@ model ProactiveEscalationTracker {
 }
 
 model ProactiveEscalationDetail {
-  id                        String                     @id @default(uuid())
+  id                        String                      @id @default(uuid())
   lanCardNo                 String
   customerName              String
   product                   String
   currentBucket             String
   dateOfContact             DateTime
-  modeOfContact             String                     // Field Visit/Call
+  modeOfContact             String                      // Field Visit/Call
   dateOfTrailUploaded       DateTime?
   listOfCaseWithReasons     String
   collectionManagerNameId   String
@@ -408,7 +418,7 @@ model EscalationDetails {
 }
 
 model EscalationDetail {
-  id                        String            @id @default(uuid())
+  id                        String             @id @default(uuid())
   customerName              String
   loanCardNo                String
   productBucketDpd          String
@@ -436,13 +446,13 @@ model PaymentRegister {
 }
 
 model PaymentDetail {
-  id                    String         @id @default(uuid())
+  id                    String          @id @default(uuid())
   srNo                  String
   month                 String
   eReceiptNo            String
   accountNo             String
   customerName          String
-  receiptAmount         Decimal
+  receiptAmount         Decimal         @db.Decimal(10, 2) // Added precision
   modeOfPayment         String
   depositionDate        DateTime
   fosHhdId              String
@@ -471,14 +481,14 @@ model RepoKitTracker {
 }
 
 model RepoKitDetail {
-  id                      String        @id @default(uuid())
+  id                      String         @id @default(uuid())
   srNo                    String
   repoKitNo               String
   issueDateFromBank       DateTime
   lanNo                   String
   product                 String
   bucketDpd               String
-  usedUnused              String        // Used/Unused
+  usedUnused              String         // Used/Unused
   executiveSign           String
   dateOfReturnToCo        DateTime?
   collectionManagerEmpId  String
@@ -504,7 +514,7 @@ model ApprovalRequest {
   status        ApprovalStatus    @default(PENDING)
   adminResponse String?
   reviewedAt    DateTime?
-  reviewedBy    String?
+  reviewedBy    String?           // User ID of admin who reviewed
 
   @@map("approval_requests")
 }
@@ -525,8 +535,8 @@ model UploadedFile {
 
 model Session {
   id             String   @id @default(uuid())
-  createdAt      DateTime
-  updatedAt      DateTime
+  createdAt      DateTime @default(now()) // Added default
+  updatedAt      DateTime @updatedAt
   expiresAt      DateTime
   token          String   @unique
   ipAddress      String?
@@ -540,8 +550,8 @@ model Session {
 
 model Account {
   id                    String    @id @default(uuid())
-  createdAt             DateTime
-  updatedAt             DateTime
+  createdAt             DateTime  @default(now()) // Added default
+  updatedAt             DateTime  @updatedAt
   accountId             String
   providerId            String
   accessToken           String?
@@ -554,25 +564,245 @@ model Account {
   userId                String
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([providerId, accountId]) // Added unique constraint
   @@map("accounts")
 }
 
 model Verification {
   id         String    @id @default(uuid())
-  createdAt  DateTime?
-  updatedAt  DateTime?
+  createdAt  DateTime? @default(now()) // Added default
+  updatedAt  DateTime? @updatedAt
   identifier String
   value      String
   expiresAt  DateTime
 
+  @@unique([identifier, value]) // Added unique constraint
   @@map("verifications")
 }
 
+// Notifications System
+model Notification {
+  id            String              @id @default(uuid())
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  userId        String
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type          NotificationType
+  title         String
+  message       String
+  link          String?             // Optional link to related resource
+
+  read          Boolean             @default(false)
+  readAt        DateTime?
+
+  // Related entities
+  relatedId     String?             // ID of related form/request
+  relatedType   String?             // Type: 'form', 'approval', etc.
+
+  @@map("notifications")
+  @@index([userId, read])
+  @@index([createdAt])
+}
+
+// Activity Logs
+model ActivityLog {
+  id            String        @id @default(uuid())
+  createdAt     DateTime      @default(now())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  action        ActivityAction
+  entityType    String        // form type or 'approval_request'
+  entityId      String?       // ID of the entity
+
+  description   String
+  metadata      Json?         // Additional data (old values, new values, etc.)
+
+  ipAddress     String?
+  userAgent     String?
+
+  @@map("activity_logs")
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
+}
+
+// NEW MODELS START HERE
+// Auditing Firm model
+model AuditingFirm {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  name      String   @unique // "Agrawal & Dhandhania", "Sumeru", "Patil"
+
+  // Relations
+  auditors          Auditor[]
+  audits            Audit[]
+  agencyAssignments AgencyAssignment[] // Added relation
+
+  @@map("auditing_firms")
+}
+
+// Auditor model (links users to firms)
+model Auditor {
+  id          String       @id @default(uuid())
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  userId      String       @unique
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firmId      String
+  firm        AuditingFirm @relation(fields: [firmId], references: [id], onDelete: Cascade)
+
+  // Audits conducted by this auditor
+  audits      Audit[]
+
+  @@map("auditors")
+}
+
+// Agency Assignment to Auditing Firm
+model AgencyAssignment {
+  id          String       @id @default(uuid())
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  agencyId    String
+  agency      User         @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  firmId      String
+  firm        AuditingFirm @relation(fields: [firmId], references: [id], onDelete: Cascade)
+
+  assignedBy  String       // Super Admin User ID who assigned
+  assignedAt  DateTime     @default(now())
+
+  isActive    Boolean      @default(true)
+
+  @@unique([agencyId, firmId])
+  @@map("agency_assignments")
+}
+
+// Audit model
+model Audit {
+  id                String       @id @default(uuid())
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  // Agency being audited
+  agencyId          String
+  agency            User         @relation("AuditAgency", fields: [agencyId], references: [id], onDelete: Cascade) // Clarified relation name
+
+  // Auditing firm and auditor
+  firmId            String
+  firm              AuditingFirm @relation(fields: [firmId], references: [id], onDelete: Cascade)
+
+  auditorId         String
+  auditor           Auditor      @relation(fields: [auditorId], references: [id])
+
+  // Audit details
+  auditDate         DateTime
+  auditorName       String       // Name of person who conducted audit
+  auditorEmployeeId String?      // Employee ID of auditor
+  location          String?
+  remarks           String?
+
+  status            AuditStatus  @default(IN_PROGRESS)
+
+  // Relations
+  observations      Observation[]
+
+  @@map("audits")
+}
+
+// Observation model
+model Observation {
+  id                 String              @id @default(uuid())
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  // Related audit
+  auditId            String
+  audit              Audit               @relation(fields: [auditId], references: [id], onDelete: Cascade)
+
+  // Observation details
+  observationNumber  String              // e.g., "OBS-001"
+  category           String              // e.g., "Compliance", "Documentation", "Process"
+  severity           ObservationSeverity @default(MEDIUM)
+  description        String              @db.Text
+  evidenceRequired   Boolean             @default(false)
+
+  // Visibility and status
+  visibleToAgency    Boolean             @default(false)
+  sentToAgencyAt     DateTime?
+  sentBy             String?             // Admin User ID who sent to agency
+
+  status             ObservationStatus   @default(PENDING_ADMIN_REVIEW)
+
+  // Agency response
+  agencyResponse     String?             @db.Text
+  agencyAccepted     Boolean?
+  agencyResponseDate DateTime?
+  evidenceSubmitted  Boolean             @default(false)
+  evidencePath       String?
+
+  // Deadline for agency response
+  responseDeadline   DateTime?
+  autoAcceptedAt     DateTime?
+
+  // Penalty
+  penaltyAssigned    Boolean             @default(false)
+  penaltyId          String?             @unique
+  penalty            Penalty?            @relation(fields: [penaltyId], references: [id])
+
+  @@map("observations")
+  @@index([auditId])
+  @@index([status])
+}
+
+// Penalty model
+model Penalty {
+  id                   String        @id @default(uuid())
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  // Related observation
+  observationId        String        @unique
+  observation          Observation?  // Relation field defined implicitly by @relation on Observation.penalty
+
+  // Agency
+  agencyId             String
+  agency               User          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  // Penalty details
+  penaltyAmount        Decimal       @db.Decimal(10, 2)
+  penaltyReason        String        @db.Text
+  deductionMonth       String        // Month when penalty will be deducted
+
+  // Status
+  status               PenaltyStatus @default(DRAFT)
+  assignedBy           String        // Admin User ID who assigned penalty
+  assignedAt           DateTime      @default(now())
+  submittedAt          DateTime?
+
+  // Agency acknowledgment
+  acknowledgedByAgency Boolean       @default(false)
+  acknowledgedAt       DateTime?
+
+  // Corrective action
+  correctiveAction     String?       @db.Text
+
+  @@map("penalties")
+  @@index([agencyId])
+  @@index([status])
+}
+// NEW MODELS END HERE
+
+// Enums
 enum UserRole {
+  SUPER_ADMIN
   USER
   ADMIN
   AUDITOR
   COLLECTION_MANAGER
+  // Remove AUDITING_FIRM if it's still here
 }
 
 enum SubmissionStatus {
@@ -592,4 +822,72 @@ enum ApprovalStatus {
   PENDING
   APPROVED
   REJECTED
+  REVISED // May not be needed, consider removing if REJECTED covers this
 }
+
+enum NotificationType {
+  APPROVAL_REQUESTED      // When user requests approval
+  APPROVAL_APPROVED       // When admin approves request
+  APPROVAL_REJECTED       // When admin rejects request
+  DOCUMENT_REQUESTED      // When admin requests document
+  FORM_SUBMITTED          // When form is submitted
+  FORM_LOCKED             // When form is locked after resubmission
+  SYSTEM_ALERT            // System notifications (e.g., audit assigned, observation received, penalty assigned)
+}
+
+enum ActivityAction {
+  FORM_CREATED
+  FORM_UPDATED
+  FORM_SUBMITTED
+  FORM_RESUBMITTED
+  FORM_DELETED
+  APPROVAL_REQUESTED
+  APPROVAL_GRANTED
+  APPROVAL_REJECTED
+  DOCUMENT_UPLOADED
+  USER_LOGIN
+  USER_LOGOUT
+  SETTINGS_CHANGED
+  // NEW Audit Actions
+  AUDIT_CREATED
+  OBSERVATION_ADDED
+  OBSERVATION_SENT_TO_AGENCY
+  OBSERVATION_RESPONDED
+  PENALTY_ASSIGNED
+  PENALTY_SUBMITTED
+  AGENCY_ASSIGNED_TO_FIRM
+}
+
+// NEW Enums START HERE
+enum AuditStatus {
+  IN_PROGRESS
+  COMPLETED       // Auditor finished, pending admin review/action
+  UNDER_REVIEW    // Admin is reviewing
+  CLOSED          // Audit process complete for this cycle
+}
+
+enum ObservationSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ObservationStatus {
+  PENDING_ADMIN_REVIEW      // Observation created by auditor, needs admin check
+  SENT_TO_AGENCY          // Admin sent to agency, awaiting response
+  AWAITING_AGENCY_RESPONSE  // Agency is reviewing (optional state if needed)
+  AGENCY_ACCEPTED         // Agency accepted the observation
+  AGENCY_DISPUTED         // Agency disputed with evidence (needs admin review)
+  AUTO_ACCEPTED           // Auto-accepted due to timeout (treated as accepted)
+  RESOLVED                // Admin marked as resolved (after review, potentially no penalty)
+  CLOSED                  // Closed with penalty assigned or resolved without penalty
+}
+
+enum PenaltyStatus {
+  DRAFT      // Admin created, not yet visible to agency
+  SUBMITTED  // Admin submitted, visible to agency
+  ACKNOWLEDGED // Agency viewed/acknowledged the penalty
+  PAID       // Penalty amount deducted/paid (future state maybe)
+}
+// NEW Enums END HERE

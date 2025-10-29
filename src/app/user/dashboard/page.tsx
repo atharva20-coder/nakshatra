@@ -9,6 +9,7 @@ import { CheckCircle, Clock, FileText, AlertCircle, Plus, Edit } from "lucide-re
 import { FORM_CONFIGS, FormType } from "@/types/forms";
 import { SubmissionStatus } from "@/generated/prisma";
 import Link from "next/link";
+import { ReturnButton } from "@/components/return-button";
 
 // Define form table mappings
 const FORM_TABLE_MAPPINGS = {
@@ -234,14 +235,14 @@ function FormCard({ formStatus }: FormCardProps) {
             {hasExistingForm ? (
               <>
                 <Button asChild size="sm" className="flex-1">
-                  <Link href={`/forms/${formStatus.formType}/${formStatus.formId}`}>
+                  <Link href={`/user/forms/${formStatus.formType}/${formStatus.formId}`}>
                     <Edit className="h-4 w-4 mr-2" />
                     {formStatus.status === 'DRAFT' ? 'Continue Editing' : 'View Form'}
                   </Link>
                 </Button>
                 {formStatus.status === 'DRAFT' && (
                   <Button asChild variant="outline" size="sm">
-                    <Link href={`/forms/${formStatus.formType}`}>
+                    <Link href={`/user/forms/${formStatus.formType}`}>
                       <Plus className="h-4 w-4" />
                     </Link>
                   </Button>
@@ -249,7 +250,7 @@ function FormCard({ formStatus }: FormCardProps) {
               </>
             ) : (
               <Button asChild size="sm" className="flex-1">
-                <Link href={`/forms/${formStatus.formType}`}>
+                <Link href={`/user/forms/${formStatus.formType}`}>
                   <Plus className="h-4 w-4 mr-2" />
                   Create New
                 </Link>
@@ -310,6 +311,9 @@ export default async function Dashboard() {
           <p className="text-gray-600 dark:text-gray-400">
             Manage your form submissions and track compliance status
           </p>
+        </div><div className="space-y-8">
+          <ReturnButton href="/profile" label="Profile" />
+          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
         </div>
 
         {/* Statistics Cards */}
