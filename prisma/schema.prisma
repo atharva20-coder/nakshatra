@@ -66,6 +66,10 @@ model User {
   auditsReceived              Audit[]                             @relation("AuditAgency") // Clarified relation name
   penalties                   Penalty[]
 
+  cmProfile                   CollectionManagerProfile?
+  cmAssignedAgencies          CMAgencyAssignment[] @relation("CMAssignedAgencies")
+  cmApprovalsReceived         CMApproval[] @relation("CMApprovals")
+
   @@map("users")
 }
 
@@ -625,6 +629,98 @@ model ActivityLog {
   @@map("activity_logs")
   @@index([userId, createdAt])
   @@index([entityType, entityId])
+}
+
+// Collection Manager Profile
+model CollectionManagerProfile {
+  id                    String   @id @default(uuid())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  employeeId            String   @unique
+  designation           String
+  department            String?
+  productsAssigned      String[] // Array of products like ["Credit Card", "Personal Loan"]
+  
+  // Supervisor relationship (self-referencing, optional)
+  supervisorId          String?
+  supervisor            CollectionManagerProfile? @relation("CMSupervisor", fields: [supervisorId], references: [id], onDelete: SetNull)
+  subordinates          CollectionManagerProfile[] @relation("CMSupervisor")
+  
+  // Agency assignments
+  agencyAssignments     CMAgencyAssignment[]
+  
+  // Approvals given by this CM
+  approvalsGiven        CMApproval[]
+  
+  // Notification preferences
+  notificationsEnabled  Boolean  @default(true)
+  emailNotifications    Boolean  @default(true)
+  
+  @@map("collection_manager_profiles")
+  @@index([employeeId])
+  @@index([supervisorId])
+}
+
+// CM to Agency Assignment
+model CMAgencyAssignment {
+  id              String   @id @default(uuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  cmProfileId     String
+  cmProfile       CollectionManagerProfile @relation(fields: [cmProfileId], references: [id], onDelete: Cascade)
+  
+  agencyId        String
+  agency          User     @relation("CMAssignedAgencies", fields: [agencyId], references: [id], onDelete: Cascade)
+  
+  assignedBy      String   // Admin/SuperAdmin user ID who made the assignment
+  assignedAt      DateTime @default(now())
+  isActive        Boolean  @default(true)
+  
+  // Track if CM has viewed this assignment
+  viewedByAt      DateTime?
+  
+  @@unique([cmProfileId, agencyId])
+  @@map("cm_agency_assignments")
+  @@index([cmProfileId])
+  @@index([agencyId])
+  @@index([isActive])
+}
+
+// CM Approval Records (tracks all approvals given via CM session)
+model CMApproval {
+  id                    String   @id @default(uuid())
+  createdAt             DateTime @default(now())
+  
+  cmProfileId           String
+  cmProfile             CollectionManagerProfile @relation(fields: [cmProfileId], references: [id], onDelete: Cascade)
+  
+  agencyId              String
+  agency                User     @relation("CMApprovals", fields: [agencyId], references: [id], onDelete: Cascade)
+  
+  formType              String   // e.g., "agencyVisits", "assetManagement"
+  formId                String   // ID of the form
+  rowId                 String?  // If approval was for specific row
+  
+  approvalSignature     String   // Full signature text
+  productTag            String   // Product for which approval was given
+  remarks               String?
+  
+  ipAddress             String?
+  userAgent             String?
+  
+  // Link to supervisor for reporting
+  reportedToSupervisor  Boolean  @default(false)
+  
+  @@map("cm_approvals")
+  @@index([cmProfileId])
+  @@index([agencyId])
+  @@index([formType, formId])
+  @@index([createdAt])
 }
 
 // NEW MODELS START HERE
