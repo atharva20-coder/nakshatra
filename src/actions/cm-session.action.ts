@@ -260,6 +260,32 @@ export async function cmApproveWithSessionAction(input: CMApprovalInput) {
     const ipAddress = header ? header.split(",")[0].trim() : null;
     const userAgent = headersList.get("user-agent");
 
+    // === FIX: Get CM Profile ID ===
+    const cmProfile = await prisma.collectionManagerProfile.findUnique({
+      where: { userId: cmSession.cmUserId }
+    });
+
+    if (!cmProfile) {
+      return { error: "Collection Manager profile not found" };
+    }
+
+    // === FIX: Create CMApproval record ===
+    await prisma.cMApproval.create({
+      data: {
+        cmProfileId: cmProfile.id,
+        agencyId: agencySession.user.id,
+        formType: input.formType,
+        formId: input.formId,
+        rowId: input.rowId,
+        approvalSignature: approvalSignature,
+        productTag: cmSession.productTag,
+        remarks: input.remarks || null,
+        ipAddress: ipAddress || null,
+        userAgent: userAgent || null,
+        reportedToSupervisor: false // Can be updated later if needed
+      }
+    });
+
     // Log the approval
     await logFormActivityAction({
       action: ActivityAction.FORM_UPDATED,

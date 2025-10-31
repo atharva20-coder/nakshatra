@@ -7,9 +7,9 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button"; // ✅ Added missing Button import
+import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Users, ShieldCheck, UserCheck, Settings, LinkIcon } from "lucide-react";
+import { UserCheck, Settings, LinkIcon, FileText } from "lucide-react"; // Added FileText
 
 export default async function Page() {
   const headersList = await headers();
@@ -71,8 +71,8 @@ export default async function Page() {
           <ReturnButton href="/profile" label="Back to Profile" />
         </div>
 
-        {/* --- AUDIT MANAGEMENT CARD --- */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {/* --- MANAGEMENT CARDS --- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Audit Management</CardTitle>
@@ -90,9 +90,46 @@ export default async function Page() {
               </Button>
             </CardContent>
           </Card>
-          {/* (Optional: add more cards here later) */}
+
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">CM Assignment</CardTitle>
+              <UserCheck className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">Assign Agencies</div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Assign agencies to specific Collection Managers.
+              </p>
+              <Button size="sm" asChild>
+                <Link href="/super/cm-assignments">
+                  <LinkIcon className="mr-2 h-4 w-4" /> Go to Assignments
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* --- NEW REPORT CARD --- */}
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Assignment Reports</CardTitle>
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">View Reports</div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Monthly reports of all agency assignments.
+              </p>
+              <Button size="sm" asChild>
+                <Link href="/super/reports">
+                  <LinkIcon className="mr-2 h-4 w-4" /> View Reports
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
         </div>
-        {/* --- END AUDIT MANAGEMENT CARD --- */}
+        {/* --- END MANAGEMENT CARDS --- */}
+
 
         {/* --- USER MANAGEMENT TABLE --- */}
         <div id="user-table">
