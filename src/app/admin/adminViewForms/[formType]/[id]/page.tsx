@@ -13,9 +13,9 @@ import { AgencyVisitForm } from "@/components/forms/AgencyVisitForm";
 import { AssetManagementForm } from "@/components/forms/AssetManagementForm";
 import { CodeOfConductForm } from "@/components/forms/CodeOfConductForm";
 import { DeclarationCumUndertakingForm } from "@/components/forms/DeclarationCumUndertakingForm";
-// import { EscalationDetailsForm } from "@/components/forms/EscalationDetailsForm";
+import { EscalationDetailsForm } from "@/components/forms/EscalationDetailsForm"; // Uncommented
 import { ManpowerRegisterForm } from "@/components/forms/ManpowerRegisterForm";
-// import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm"; // Assuming not yet implemented
+// import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm";
 import { PaymentRegisterForm } from "@/components/forms/PaymentRegisterForm";
 // import { PenaltyMatrixForm } from "@/components/forms/PenaltyMatrixForm";
 import { ProactiveEscalationForm } from "@/components/forms/ProactiveEscalationForm";
@@ -29,16 +29,16 @@ import { getAgencyVisitByIdForAdmin } from "@/actions/agency-visit.action";
 import { getAssetManagementByIdForAdmin } from "@/actions/asset-management.action";
 import { getCodeOfConductByIdForAdmin } from "@/actions/code-of-conduct.action";
 import { getDeclarationByIdForAdmin } from "@/actions/declaration-cum-undertaking.action";
-// import { getEscalationDetailsByIdForAdmin } from "@/actions/escalation-details.action"; // Create this action
+import { getEscalationDetailsByIdForAdmin } from "@/actions/escalation-details.action"; // Uncommented
 import { getManpowerRegisterByIdForAdmin } from "@/actions/manpower-register.action";
-// import { getMonthlyComplianceByIdForAdmin } from "@/actions/monthly-compliance.action"; // Create this action
+// import { getMonthlyComplianceByIdForAdmin } from "@/actions/monthly-compliance.action";
 import { getPaymentRegisterByIdForAdmin } from "@/actions/payment-register.action";
-// import { getPenaltyMatrixByIdForAdmin } from "@/actions/penalty-matrix.action"; // Create this action
+// import { getPenaltyMatrixByIdForAdmin } from "@/actions/penalty-matrix.action";
 import { getProactiveEscalationByIdForAdmin } from "@/actions/proactive-escalation.action";
 import { getProductDeclarationByIdForAdmin } from "@/actions/product-declaration.action";
 import { getRepoKitTrackerByIdForAdmin } from "@/actions/repo-kit-tracker.action";
 import { getTelephoneDeclarationByIdForAdmin } from "@/actions/telephone-declaration.action";
-// import { getTrainingTrackerByIdForAdmin } from "@/actions/training-tracker.action"; // Create this action
+// import { getTrainingTrackerByIdForAdmin } from "@/actions/training-tracker.action";
 
 type FormType = keyof typeof FORM_CONFIGS;
 
@@ -61,6 +61,7 @@ const renderAdminFormView = async (formType: FormType, id: string) => {
                   Awaited<ReturnType<typeof getProactiveEscalationByIdForAdmin>> |
                   Awaited<ReturnType<typeof getPaymentRegisterByIdForAdmin>> |
                   Awaited<ReturnType<typeof getRepoKitTrackerByIdForAdmin>> |
+                  Awaited<ReturnType<typeof getEscalationDetailsByIdForAdmin>> | // Added new type
                   null = null;
 
   // Call the appropriate ADMIN fetch action based on formType
@@ -74,37 +75,41 @@ const renderAdminFormView = async (formType: FormType, id: string) => {
         if (!submission) notFound();
         return <AgencyVisitForm initialData={submission} isAdminView={true} />;
     case 'declarationCumUndertaking':
-        submission = await getDeclarationByIdForAdmin(id); // Ensure this function exists and is imported
+        submission = await getDeclarationByIdForAdmin(id);
         if (!submission) notFound();
         return <DeclarationCumUndertakingForm initialData={submission} isAdminView={true} />;
     case 'assetManagement':
-        submission = await getAssetManagementByIdForAdmin(id); // Ensure this function exists and is imported
+        submission = await getAssetManagementByIdForAdmin(id);
         if (!submission) notFound();
         return <AssetManagementForm initialData={submission} isAdminView={true} />;
     case 'telephoneDeclaration':
-        submission = await getTelephoneDeclarationByIdForAdmin(id); // Ensure this function exists and is imported
+        submission = await getTelephoneDeclarationByIdForAdmin(id);
         if (!submission) notFound();
         return <TelephoneDeclarationForm initialData={submission} isAdminView={true} />;
     case 'manpowerRegister':
-        submission = await getManpowerRegisterByIdForAdmin(id); // Ensure this function exists and is imported
+        submission = await getManpowerRegisterByIdForAdmin(id);
         if (!submission) notFound();
         return <ManpowerRegisterForm initialData={submission} isAdminView={true} />;
     case 'productDeclaration':
-        submission = await getProductDeclarationByIdForAdmin(id); // Ensure this function exists and is imported
+        submission = await getProductDeclarationByIdForAdmin(id);
         if (!submission) notFound();
         return <ProductDeclarationForm initialData={submission} isAdminView={true} />;
     case 'proactiveEscalation':
-        submission = await getProactiveEscalationByIdForAdmin(id); // Ensure this function exists and is imported
+        submission = await getProactiveEscalationByIdForAdmin(id);
         if (!submission) notFound();
         return <ProactiveEscalationForm initialData={submission} isAdminView={true} />;
     case 'paymentRegister':
-        submission = await getPaymentRegisterByIdForAdmin(id); // Ensure this function exists and is imported
+        submission = await getPaymentRegisterByIdForAdmin(id);
         if (!submission) notFound();
         return <PaymentRegisterForm initialData={submission} isAdminView={true} />;
     case 'repoKitTracker':
-        submission = await getRepoKitTrackerByIdForAdmin(id); // Ensure this function exists and is imported
+        submission = await getRepoKitTrackerByIdForAdmin(id);
         if (!submission) notFound();
         return <RepoKitTrackerForm initialData={submission} isAdminView={true} />;
+    case 'escalationDetails': // Uncommented
+      submission = await getEscalationDetailsByIdForAdmin(id);
+      if (!submission) notFound();
+      return <EscalationDetailsForm initialData={submission} isAdminView={true} />;
     // --- ADD CASES FOR THE REMAINING FORMS ---
     // case 'monthlyCompliance':
     //   submission = await getMonthlyComplianceByIdForAdmin(id);
@@ -118,10 +123,6 @@ const renderAdminFormView = async (formType: FormType, id: string) => {
     //   submission = await getTrainingTrackerByIdForAdmin(id);
     //   if (!submission) notFound();
     //   return <TrainingTrackerForm initialData={submission} isAdminView={true} />;
-    // case 'escalationDetails':
-    //   submission = await getEscalationDetailsByIdForAdmin(id);
-    //   if (!submission) notFound();
-    //   return <EscalationDetailsForm initialData={submission} isAdminView={true} />;
     default:
         console.error(`Admin view not implemented for form type: ${formType}`);
         notFound();
@@ -134,19 +135,19 @@ async function getFormData(formType: FormType, id: string) {
     switch (formType) {
         case 'codeOfConduct': return await getCodeOfConductByIdForAdmin(id);
         case 'agencyVisits': return await getAgencyVisitByIdForAdmin(id);
-        case 'declarationCumUndertaking': return await getDeclarationByIdForAdmin(id); // Ensure this exists
-        case 'assetManagement': return await getAssetManagementByIdForAdmin(id); // Ensure this exists
-        case 'telephoneDeclaration': return await getTelephoneDeclarationByIdForAdmin(id); // Ensure this exists
-        case 'manpowerRegister': return await getManpowerRegisterByIdForAdmin(id); // Ensure this exists
-        case 'productDeclaration': return await getProductDeclarationByIdForAdmin(id); // Ensure this exists
-        case 'proactiveEscalation': return await getProactiveEscalationByIdForAdmin(id); // Ensure this exists
-        case 'paymentRegister': return await getPaymentRegisterByIdForAdmin(id); // Ensure this exists
-        case 'repoKitTracker': return await getRepoKitTrackerByIdForAdmin(id); // Ensure this exists
+        case 'declarationCumUndertaking': return await getDeclarationByIdForAdmin(id);
+        case 'assetManagement': return await getAssetManagementByIdForAdmin(id);
+        case 'telephoneDeclaration': return await getTelephoneDeclarationByIdForAdmin(id);
+        case 'manpowerRegister': return await getManpowerRegisterByIdForAdmin(id);
+        case 'productDeclaration': return await getProductDeclarationByIdForAdmin(id);
+        case 'proactiveEscalation': return await getProactiveEscalationByIdForAdmin(id);
+        case 'paymentRegister': return await getPaymentRegisterByIdForAdmin(id);
+        case 'repoKitTracker': return await getRepoKitTrackerByIdForAdmin(id);
+        case 'escalationDetails': return await getEscalationDetailsByIdForAdmin(id); // Uncommented
         // --- ADD CASES FOR THE REMAINING FORMS ---
         // case 'monthlyCompliance': return await getMonthlyComplianceByIdForAdmin(id);
         // case 'penaltyMatrix': return await getPenaltyMatrixByIdForAdmin(id);
         // case 'trainingTracker': return await getTrainingTrackerByIdForAdmin(id);
-        // case 'escalationDetails': return await getEscalationDetailsByIdForAdmin(id);
         default: return null;
     }
 }

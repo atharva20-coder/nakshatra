@@ -23,14 +23,14 @@ model Post {
 
 model User {
   id                          String                              @id @default(uuid())
-  createdAt                   DateTime                            @default(now()) // Added default
+  createdAt                   DateTime                            @default(now())
   updatedAt                   DateTime                            @updatedAt
   name                        String
   email                       String                              @unique
-  emailVerified               Boolean                             @default(false) // Added default
+  emailVerified               Boolean                             @default(false)
   image                       String?
   role                        UserRole                            @default(USER)
-  banned                      Boolean?                            @default(false) // Added default
+  banned                      Boolean?                            @default(false)
   banReason                   String?
   banExpires                  DateTime?
   accounts                    Account[]
@@ -39,7 +39,7 @@ model User {
   codeOfConduct               CodeOfConduct[]
   declarationCumUndertaking   DeclarationCumUndertaking[]
   agencyVisits                AgencyVisit[]
-  monthlyCompliance           MonthlyCompliance[]
+  complianceForms             MonthlyCompliance[] @relation("AgencyComplianceForms")
   assetManagement             AssetManagement[]
   telephoneDeclaration        TelephoneDeclaration[]
   agencyManpowerRegister      AgencyManpowerRegister[]
@@ -50,6 +50,7 @@ model User {
   escalationDetails           EscalationDetails[]
   paymentRegister             PaymentRegister[]
   repoKitTracker              RepoKitTracker[]
+  noDuesDeclarations          NoDuesDeclaration[] // <-- NEW FORM 1 RELATION
 
   posts                       Post[]
   sessions                    Session[]
@@ -60,12 +61,14 @@ model User {
   notifications               Notification[]
   activityLogs                ActivityLog[]
 
-  // NEW Auditor relations
+  // Auditor relations
   auditor                     Auditor?
   agencyAssignments           AgencyAssignment[]
-  auditsReceived              Audit[]                             @relation("AuditAgency") // Clarified relation name
+  auditsReceived              Audit[]                             @relation("AuditAgency")
   penalties                   Penalty[]
+  // Note: The relation for AuditScorecard is on the Auditor model, not User
 
+  // CM relations
   cmProfile                   CollectionManagerProfile?
   cmAssignedAgencies          CMAgencyAssignment[] @relation("CMAssignedAgencies")
   cmApprovalsReceived         CMApproval[] @relation("CMApprovals")
@@ -85,7 +88,7 @@ model MonthlySubmission {
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
-  @@unique([userId, createdAt]) // Changed unique constraint for monthly tracking
+  @@unique([userId, createdAt])
   @@map("monthly_submissions")
 }
 
@@ -104,7 +107,7 @@ model CodeOfConduct {
 
 model CodeOfConductDetail {
   id                String           @id @default(uuid())
-  name              String           // Proprietor/Partner/Director
+  name              String
   signature         String
   date              DateTime
   conductId         String
@@ -121,7 +124,6 @@ model DeclarationCumUndertaking {
   userId                      String
   user                        User                              @relation(fields: [userId], references: [id], onDelete: Cascade)
   status                      SubmissionStatus                  @default(DRAFT)
-
   collectionManagers          DeclarationCollectionManager[]
 
   @@map("declaration_cum_undertaking")
@@ -154,15 +156,15 @@ model AgencyVisit {
 model VisitDetail {
   id             String      @id @default(uuid())
   srNo           String
-  dateOfVisit    String // Consider changing to DateTime if precision needed
+  dateOfVisit    String
   employeeId     String
   employeeName   String
   mobileNo       String
   branchLocation String
   product        String
   bucketDpd      String
-  timeIn         String // Consider changing to DateTime
-  timeOut        String // Consider changing to DateTime
+  timeIn         String
+  timeOut        String
   signature      String
   purposeOfVisit String
   visitId        String
@@ -171,33 +173,58 @@ model VisitDetail {
   @@map("visit_details")
 }
 
-// 4. Monthly Compliance Declaration
-model MonthlyCompliance {
-  id        String           @id @default(uuid())
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-  userId    String
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  status    SubmissionStatus @default(DRAFT)
-  details   MonthlyComplianceDetail[]
+// 4. Monthly Compliance
+model ComplianceParameter {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  srNo        Int      @unique
+  parameter   String   @db.Text
+  category    String?
+  isActive    Boolean  @default(true)
+  responses   ComplianceResponse[]
 
-  @@map("monthly_compliance")
+  @@map("compliance_parameters")
+  @@index([isActive, srNo])
 }
 
-model MonthlyComplianceDetail {
-  id                      String            @id @default(uuid())
-  srNo                    String
-  complianceParameters    String
-  complied                String            // Yes/No/NA
-  agencyRemarks           String?
-  collectionManagerName   String
-  collectionManagerEmpId  String
-  collectionManagerSign   String
-  date                    DateTime
-  complianceId            String
-  compliance              MonthlyCompliance @relation(fields: [complianceId], references: [id], onDelete: Cascade)
+model MonthlyCompliance {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  agencyId    String
+  agency      User     @relation("AgencyComplianceForms", fields: [agencyId], references: [id], onDelete: Cascade)
+  month       Int
+  year        Int
+  status      SubmissionStatus @default(DRAFT)
+  submittedAt DateTime?
+  responses   ComplianceResponse[]
+  cmSignatures CMComplianceSignature[]
 
-  @@map("monthly_compliance_details")
+  @@unique([agencyId, month, year])
+  @@map("monthly_compliance_forms")
+  @@index([agencyId, status])
+  @@index([month, year])
+}
+
+model ComplianceResponse {
+  id            String   @id @default(uuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  formId        String
+  form          MonthlyCompliance @relation(fields: [formId], references: [id], onDelete: Cascade)
+  parameterId   String
+  parameter     ComplianceParameter @relation(fields: [parameterId], references: [id], onDelete: Cascade)
+  complied      ComplianceStatus @default(PENDING)
+  agencyRemarks String?          @db.Text
+  approvals     Json?
+  lastUpdatedBy String?
+
+  @@unique([formId, parameterId])
+  @@map("compliance_responses")
+  @@index([formId])
+  @@index([parameterId])
+  @@index([complied])
 }
 
 // 5. Asset Management Declaration
@@ -220,8 +247,8 @@ model AssetManagementDetail {
   ipAddress             String
   executiveName         String
   idCardNumber          String
-  printerAccess         String          // Yes/No with reason
-  assetDisposed         String          // data purged info
+  printerAccess         String
+  assetDisposed         String
   assetManagementId     String
   assetManagement       AssetManagement @relation(fields: [assetManagementId], references: [id], onDelete: Cascade)
 
@@ -247,7 +274,7 @@ model TelephoneDetail {
   telephoneNo           String
   username              String
   executiveCategory     String
-  recordingLine         String               // Yes/No
+  recordingLine         String
   remarks               String?
   telephoneDeclarationId String
   telephoneDeclaration  TelephoneDeclaration @relation(fields: [telephoneDeclarationId], references: [id], onDelete: Cascade)
@@ -271,13 +298,13 @@ model AgencyManpowerRegister {
 model ManpowerDetail {
   id                      String                  @id @default(uuid())
   srNo                    String
-  executiveCategory       String                  // FOS/Tele-caller/Tracer/Backend
+  executiveCategory       String
   hhdIdOfFos              String?
   axisIdOfFos             String?
   fosFullName             String
   dateOfJoining           DateTime
   product                 String
-  cocSigned               String                  // Yes/No
+  cocSigned               String
   collectionManagerName   String
   collectionManagerId     String
   collectionManagerSign   String
@@ -338,7 +365,7 @@ model PenaltyDetail {
   nonComplianceMonth          String
   parameter                   String
   product                     String
-  penaltyAmount               Decimal               @db.Decimal(10, 2) // Added precision
+  penaltyAmount               Decimal               @db.Decimal(10, 2)
   penaltyDeductedMonth        String
   correctiveActionTaken       String
   agency                      String
@@ -398,7 +425,7 @@ model ProactiveEscalationDetail {
   product                   String
   currentBucket             String
   dateOfContact             DateTime
-  modeOfContact             String                      // Field Visit/Call
+  modeOfContact             String
   dateOfTrailUploaded       DateTime?
   listOfCaseWithReasons     String
   collectionManagerNameId   String
@@ -456,7 +483,7 @@ model PaymentDetail {
   eReceiptNo            String
   accountNo             String
   customerName          String
-  receiptAmount         Decimal         @db.Decimal(10, 2) // Added precision
+  receiptAmount         Decimal         @db.Decimal(10, 2)
   modeOfPayment         String
   depositionDate        DateTime
   fosHhdId              String
@@ -492,7 +519,7 @@ model RepoKitDetail {
   lanNo                   String
   product                 String
   bucketDpd               String
-  usedUnused              String         // Used/Unused
+  usedUnused              String
   executiveSign           String
   dateOfReturnToCo        DateTime?
   collectionManagerEmpId  String
@@ -503,6 +530,83 @@ model RepoKitDetail {
   @@map("repo_kit_details")
 }
 
+// ============================================
+// --- NEW FORM 1: NO DUES / DATA PURGING ---
+// ============================================
+
+model NoDuesDeclaration {
+  id        String           @id @default(uuid())
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  
+  agencyId  String
+  agency    User             @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  
+  month     Int              // 1-12
+  year      Int              // 2025
+  
+  status    SubmissionStatus @default(DRAFT)
+  details   NoDuesDetail[]
+
+  @@unique([agencyId, month, year])
+  @@map("no_dues_declarations")
+}
+
+model NoDuesDetail {
+  id                String            @id @default(uuid())
+  formId            String
+  form              NoDuesDeclaration @relation(fields: [formId], references: [id], onDelete: Cascade)
+  
+  productBucket     String            // "Credit Card / X-Bucket"
+  month             String            // Month of declaration (e.g., "Nov-2025")
+  remarksBillAmount String?           // "No Dues" or "Bill Amount: 5000"
+  
+  // CM Approval is handled by the `CMApproval` model.
+  // A row is created in `CMApproval` linking to this `NoDuesDetail` row's `id`.
+  
+  @@map("no_dues_details")
+  @@index([formId])
+}
+
+
+// ============================================
+// --- NEW FORM 2: AUDIT SCORECARD ---
+// ============================================
+
+model AuditScorecard {
+  id            String   @id @default(uuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  auditId       String   @unique // One scorecard per audit
+  audit         Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
+
+  // --- THIS IS THE RELATIONAL APPROVAL ---
+  // This links to the Auditor *Profile* (Auditor model), not the User model.
+  auditorProfileId String   
+  auditor          Auditor  @relation("AuditorScorecards", fields: [auditorProfileId], references: [id], onDelete: Restrict)
+  
+  // Scorecard fields
+  auditPeriod   String   // "Jan-2025 to Mar-2025"
+  auditScore    Float    // e.g., 85.5
+  auditGrade    String   // "A", "B+", "C"
+  auditCategory String   // "High Risk", "Medium Risk"
+
+  finalObservation String @db.Text
+  justification    String @db.Text
+
+  // The "approval" is the existence of this record, signed off by the auditor.
+  signedAt         DateTime @default(now())
+  
+  @@map("audit_scorecards")
+  @@index([auditorProfileId])
+}
+
+
+// ============================================
+// --- APPROVAL & AUTH MODELS ---
+// ============================================
+
 // Approval Request System
 model ApprovalRequest {
   id            String            @id @default(uuid())
@@ -510,15 +614,15 @@ model ApprovalRequest {
   updatedAt     DateTime          @updatedAt
   userId        String
   user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  formType      String            // Type of form being requested for approval
-  formId        String            // ID of the specific form record
+  formType      String
+  formId        String
   requestType   ApprovalType
   reason        String
-  documentPath  String?           // Path to uploaded proof document
+  documentPath  String?
   status        ApprovalStatus    @default(PENDING)
   adminResponse String?
   reviewedAt    DateTime?
-  reviewedBy    String?           // User ID of admin who reviewed
+  reviewedBy    String?
 
   @@map("approval_requests")
 }
@@ -530,16 +634,16 @@ model UploadedFile {
   fileName      String
   originalName  String
   filePath      String
-  fileSize      Int      // in bytes
+  fileSize      Int
   mimeType      String
-  uploadedBy    String   // User ID
+  uploadedBy    String
 
   @@map("uploaded_files")
 }
 
 model Session {
   id             String   @id @default(uuid())
-  createdAt      DateTime @default(now()) // Added default
+  createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   expiresAt      DateTime
   token          String   @unique
@@ -554,7 +658,7 @@ model Session {
 
 model Account {
   id                    String    @id @default(uuid())
-  createdAt             DateTime  @default(now()) // Added default
+  createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
   accountId             String
   providerId            String
@@ -568,61 +672,56 @@ model Account {
   userId                String
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([providerId, accountId]) // Added unique constraint
+  @@unique([providerId, accountId])
   @@map("accounts")
 }
 
 model Verification {
   id         String    @id @default(uuid())
-  createdAt  DateTime? @default(now()) // Added default
+  createdAt  DateTime? @default(now())
   updatedAt  DateTime? @updatedAt
   identifier String
   value      String
   expiresAt  DateTime
 
-  @@unique([identifier, value]) // Added unique constraint
+  @@unique([identifier, value])
   @@map("verifications")
 }
 
-// Notifications System
+// ============================================
+// --- NOTIFICATION & LOGGING MODELS ---
+// ============================================
+
 model Notification {
   id            String              @id @default(uuid())
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
   userId        String
   user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   type          NotificationType
   title         String
   message       String
-  link          String?             // Optional link to related resource
-
+  link          String?
   read          Boolean             @default(false)
   readAt        DateTime?
-
-  // Related entities
-  relatedId     String?             // ID of related form/request
-  relatedType   String?             // Type: 'form', 'approval', etc.
+  relatedId     String?
+  relatedType   String?
 
   @@map("notifications")
   @@index([userId, read])
   @@index([createdAt])
 }
 
-// Activity Logs
 model ActivityLog {
   id            String        @id @default(uuid())
   createdAt     DateTime      @default(now())
   userId        String
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   action        ActivityAction
-  entityType    String        // form type or 'approval_request'
-  entityId      String?       // ID of the entity
-
+  entityType    String
+  entityId      String?
   description   String
-  metadata      Json?         // Additional data (old values, new values, etc.)
-
+  metadata      Json?
   ipAddress     String?
   userAgent     String?
 
@@ -631,7 +730,10 @@ model ActivityLog {
   @@index([entityType, entityId])
 }
 
-// Collection Manager Profile
+// ============================================
+// --- CM & AUDITOR MODELS ---
+// ============================================
+
 model CollectionManagerProfile {
   id                    String   @id @default(uuid())
   createdAt             DateTime @default(now())
@@ -643,20 +745,16 @@ model CollectionManagerProfile {
   employeeId            String   @unique
   designation           String
   department            String?
-  productsAssigned      String[] // Array of products like ["Credit Card", "Personal Loan"]
+  productsAssigned      String[]
   
-  // Supervisor relationship (self-referencing, optional)
   supervisorId          String?
   supervisor            CollectionManagerProfile? @relation("CMSupervisor", fields: [supervisorId], references: [id], onDelete: SetNull)
   subordinates          CollectionManagerProfile[] @relation("CMSupervisor")
   
-  // Agency assignments
   agencyAssignments     CMAgencyAssignment[]
-  
-  // Approvals given by this CM
   approvalsGiven        CMApproval[]
+  cmComplianceSignatures CMComplianceSignature[]
   
-  // Notification preferences
   notificationsEnabled  Boolean  @default(true)
   emailNotifications    Boolean  @default(true)
   
@@ -665,7 +763,6 @@ model CollectionManagerProfile {
   @@index([supervisorId])
 }
 
-// CM to Agency Assignment
 model CMAgencyAssignment {
   id              String   @id @default(uuid())
   createdAt       DateTime @default(now())
@@ -677,11 +774,10 @@ model CMAgencyAssignment {
   agencyId        String
   agency          User     @relation("CMAssignedAgencies", fields: [agencyId], references: [id], onDelete: Cascade)
   
-  assignedBy      String   // Admin/SuperAdmin user ID who made the assignment
+  assignedBy      String
   assignedAt      DateTime @default(now())
   isActive        Boolean  @default(true)
   
-  // Track if CM has viewed this assignment
   viewedByAt      DateTime?
   
   @@unique([cmProfileId, agencyId])
@@ -691,7 +787,7 @@ model CMAgencyAssignment {
   @@index([isActive])
 }
 
-// CM Approval Records (tracks all approvals given via CM session)
+// CM Approval Records (tracks all row-level approvals)
 model CMApproval {
   id                    String   @id @default(uuid())
   createdAt             DateTime @default(now())
@@ -702,18 +798,16 @@ model CMApproval {
   agencyId              String
   agency                User     @relation("CMApprovals", fields: [agencyId], references: [id], onDelete: Cascade)
   
-  formType              String   // e.g., "agencyVisits", "assetManagement"
-  formId                String   // ID of the form
-  rowId                 String?  // If approval was for specific row
+  formType              String   // e.g., "agencyVisits", "noDuesDeclaration"
+  formId                String   // ID of the parent form
+  rowId                 String?  // ID of the specific detail row (e.g., NoDuesDetail.id)
   
-  approvalSignature     String   // Full signature text
-  productTag            String   // Product for which approval was given
-  remarks               String?
+  approvalSignature     String
+  productTag            String
+  remarks               String?  // <-- THIS IS THE FIELD YOU WANTED
   
   ipAddress             String?
   userAgent             String?
-  
-  // Link to supervisor for reporting
   reportedToSupervisor  Boolean  @default(false)
   
   @@map("cm_approvals")
@@ -723,18 +817,36 @@ model CMApproval {
   @@index([createdAt])
 }
 
-// NEW MODELS START HERE
+// CM Compliance Signature (tracks product-level sign-off for compliance)
+model CMComplianceSignature {
+  id          String   @id @default(uuid())
+  
+  cmProfileId String
+  cmProfile   CollectionManagerProfile @relation(fields: [cmProfileId], references: [id], onDelete: Cascade)
+  
+  formId      String
+  form        MonthlyCompliance @relation(fields: [formId], references: [id], onDelete: Cascade)
+  
+  product     String
+  signedAt    DateTime @default(now())
+  remarks     String?
+  ipAddress   String?
+
+  @@unique([cmProfileId, formId, product])
+  @@map("cm_compliance_signatures")
+}
+
+
 // Auditing Firm model
 model AuditingFirm {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  name      String   @unique // "Agrawal & Dhandhania", "Sumeru", "Patil"
+  name      String   @unique
 
-  // Relations
   auditors          Auditor[]
   audits            Audit[]
-  agencyAssignments AgencyAssignment[] // Added relation
+  agencyAssignments AgencyAssignment[]
 
   @@map("auditing_firms")
 }
@@ -749,8 +861,8 @@ model Auditor {
   firmId      String
   firm        AuditingFirm @relation(fields: [firmId], references: [id], onDelete: Cascade)
 
-  // Audits conducted by this auditor
-  audits      Audit[]
+  audits          Audit[]
+  auditScorecards AuditScorecard[] @relation("AuditorScorecards") // <-- NEW RELATION
 
   @@map("auditors")
 }
@@ -760,16 +872,12 @@ model AgencyAssignment {
   id          String       @id @default(uuid())
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
-
   agencyId    String
   agency      User         @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-
   firmId      String
   firm        AuditingFirm @relation(fields: [firmId], references: [id], onDelete: Cascade)
-
-  assignedBy  String       // Super Admin User ID who assigned
+  assignedBy  String
   assignedAt  DateTime     @default(now())
-
   isActive    Boolean      @default(true)
 
   @@unique([agencyId, firmId])
@@ -781,29 +889,20 @@ model Audit {
   id                String       @id @default(uuid())
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
-
-  // Agency being audited
   agencyId          String
-  agency            User         @relation("AuditAgency", fields: [agencyId], references: [id], onDelete: Cascade) // Clarified relation name
-
-  // Auditing firm and auditor
+  agency            User         @relation("AuditAgency", fields: [agencyId], references: [id], onDelete: Cascade)
   firmId            String
   firm              AuditingFirm @relation(fields: [firmId], references: [id], onDelete: Cascade)
-
   auditorId         String
   auditor           Auditor      @relation(fields: [auditorId], references: [id])
-
-  // Audit details
   auditDate         DateTime
-  auditorName       String       // Name of person who conducted audit
-  auditorEmployeeId String?      // Employee ID of auditor
+  auditorName       String
+  auditorEmployeeId String?
   location          String?
   remarks           String?
-
   status            AuditStatus  @default(IN_PROGRESS)
-
-  // Relations
   observations      Observation[]
+  scorecard         AuditScorecard?
 
   @@map("audits")
 }
@@ -813,37 +912,24 @@ model Observation {
   id                 String              @id @default(uuid())
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
-
-  // Related audit
   auditId            String
   audit              Audit               @relation(fields: [auditId], references: [id], onDelete: Cascade)
-
-  // Observation details
-  observationNumber  String              // e.g., "OBS-001"
-  category           String              // e.g., "Compliance", "Documentation", "Process"
+  observationNumber  String
+  category           String
   severity           ObservationSeverity @default(MEDIUM)
   description        String              @db.Text
   evidenceRequired   Boolean             @default(false)
-
-  // Visibility and status
   visibleToAgency    Boolean             @default(false)
   sentToAgencyAt     DateTime?
-  sentBy             String?             // Admin User ID who sent to agency
-
+  sentBy             String?
   status             ObservationStatus   @default(PENDING_ADMIN_REVIEW)
-
-  // Agency response
   agencyResponse     String?             @db.Text
   agencyAccepted     Boolean?
   agencyResponseDate DateTime?
   evidenceSubmitted  Boolean             @default(false)
   evidencePath       String?
-
-  // Deadline for agency response
   responseDeadline   DateTime?
   autoAcceptedAt     DateTime?
-
-  // Penalty
   penaltyAssigned    Boolean             @default(false)
   penaltyId          String?             @unique
   penalty            Penalty?            @relation(fields: [penaltyId], references: [id])
@@ -858,47 +944,36 @@ model Penalty {
   id                   String        @id @default(uuid())
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
-
-  // Related observation
   observationId        String        @unique
-  observation          Observation?  // Relation field defined implicitly by @relation on Observation.penalty
-
-  // Agency
+  observation          Observation?
   agencyId             String
   agency               User          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-
-  // Penalty details
   penaltyAmount        Decimal       @db.Decimal(10, 2)
   penaltyReason        String        @db.Text
-  deductionMonth       String        // Month when penalty will be deducted
-
-  // Status
+  deductionMonth       String
   status               PenaltyStatus @default(DRAFT)
-  assignedBy           String        // Admin User ID who assigned penalty
+  assignedBy           String
   assignedAt           DateTime      @default(now())
   submittedAt          DateTime?
-
-  // Agency acknowledgment
   acknowledgedByAgency Boolean       @default(false)
   acknowledgedAt       DateTime?
-
-  // Corrective action
   correctiveAction     String?       @db.Text
 
   @@map("penalties")
   @@index([agencyId])
   @@index([status])
 }
-// NEW MODELS END HERE
 
-// Enums
+// ============================================
+// --- ENUMS ---
+// ============================================
+
 enum UserRole {
   SUPER_ADMIN
   USER
   ADMIN
   AUDITOR
   COLLECTION_MANAGER
-  // Remove AUDITING_FIRM if it's still here
 }
 
 enum SubmissionStatus {
@@ -918,17 +993,17 @@ enum ApprovalStatus {
   PENDING
   APPROVED
   REJECTED
-  REVISED // May not be needed, consider removing if REJECTED covers this
+  REVISED
 }
 
 enum NotificationType {
-  APPROVAL_REQUESTED      // When user requests approval
-  APPROVAL_APPROVED       // When admin approves request
-  APPROVAL_REJECTED       // When admin rejects request
-  DOCUMENT_REQUESTED      // When admin requests document
-  FORM_SUBMITTED          // When form is submitted
-  FORM_LOCKED             // When form is locked after resubmission
-  SYSTEM_ALERT            // System notifications (e.g., audit assigned, observation received, penalty assigned)
+  APPROVAL_REQUESTED
+  APPROVAL_APPROVED
+  APPROVAL_REJECTED
+  DOCUMENT_REQUESTED
+  FORM_SUBMITTED
+  FORM_LOCKED
+  SYSTEM_ALERT
 }
 
 enum ActivityAction {
@@ -944,7 +1019,6 @@ enum ActivityAction {
   USER_LOGIN
   USER_LOGOUT
   SETTINGS_CHANGED
-  // NEW Audit Actions
   AUDIT_CREATED
   OBSERVATION_ADDED
   OBSERVATION_SENT_TO_AGENCY
@@ -954,12 +1028,11 @@ enum ActivityAction {
   AGENCY_ASSIGNED_TO_FIRM
 }
 
-// NEW Enums START HERE
 enum AuditStatus {
   IN_PROGRESS
-  COMPLETED       // Auditor finished, pending admin review/action
-  UNDER_REVIEW    // Admin is reviewing
-  CLOSED          // Audit process complete for this cycle
+  COMPLETED
+  UNDER_REVIEW
+  CLOSED
 }
 
 enum ObservationSeverity {
@@ -970,20 +1043,26 @@ enum ObservationSeverity {
 }
 
 enum ObservationStatus {
-  PENDING_ADMIN_REVIEW      // Observation created by auditor, needs admin check
-  SENT_TO_AGENCY          // Admin sent to agency, awaiting response
-  AWAITING_AGENCY_RESPONSE  // Agency is reviewing (optional state if needed)
-  AGENCY_ACCEPTED         // Agency accepted the observation
-  AGENCY_DISPUTED         // Agency disputed with evidence (needs admin review)
-  AUTO_ACCEPTED           // Auto-accepted due to timeout (treated as accepted)
-  RESOLVED                // Admin marked as resolved (after review, potentially no penalty)
-  CLOSED                  // Closed with penalty assigned or resolved without penalty
+  PENDING_ADMIN_REVIEW
+  SENT_TO_AGENCY
+  AWAITING_AGENCY_RESPONSE
+  AGENCY_ACCEPTED
+  AGENCY_DISPUTED
+  AUTO_ACCEPTED
+  RESOLVED
+  CLOSED
 }
 
 enum PenaltyStatus {
-  DRAFT      // Admin created, not yet visible to agency
-  SUBMITTED  // Admin submitted, visible to agency
-  ACKNOWLEDGED // Agency viewed/acknowledged the penalty
-  PAID       // Penalty amount deducted/paid (future state maybe)
+  DRAFT
+  SUBMITTED
+  ACKNOWLEDGED
+  PAID
 }
-// NEW Enums END HERE
+
+enum ComplianceStatus {
+  PENDING
+  YES
+  NO
+  NA
+}

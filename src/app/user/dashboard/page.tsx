@@ -70,7 +70,7 @@ async function getUserFormStatuses(userId: string): Promise<FormStatus[]> {
           break;
         case 'monthlyCompliance':
           form = await prisma.monthlyCompliance.findFirst({
-            where: { userId },
+            where: { agencyId: userId },
             orderBy: { updatedAt: 'desc' }
           });
           break;
