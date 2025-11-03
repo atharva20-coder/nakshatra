@@ -7,8 +7,8 @@ import {
   UserRole, 
   Prisma, 
   CollectionManagerProfile, 
-  CMAgencyAssignment, // Import correct type
-  CMApproval // Import prisma type
+  CMAgencyAssignment,
+  CMApproval
 } from "@/generated/prisma";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache"; 
@@ -27,7 +27,7 @@ import { getTelephoneDeclarationByIdForAdmin } from "@/actions/telephone-declara
 
 // Type-safe response types
 interface CMProfile {
-  id: string; // This is the Profile ID, not the User ID
+  id: string;
   name: string;
   email: string;
   employeeId: string;
@@ -75,10 +75,6 @@ interface FormStatusByMonth {
 }
 
 // *** HELPER FUNCTION TO GET OR CREATE CM PROFILE ***
-/**
- * Finds a CM's profile by their User ID. If it doesn't exist,
- * it creates one and returns it.
- */
 async function getOrCreateCMProfile(userId: string): Promise<CollectionManagerProfile> {
   const existingProfile = await prisma.collectionManagerProfile.findUnique({
     where: { userId: userId },
@@ -88,19 +84,17 @@ async function getOrCreateCMProfile(userId: string): Promise<CollectionManagerPr
     return existingProfile;
   }
 
-  // Profile not found, create one
   const newProfile = await prisma.collectionManagerProfile.create({
     data: {
       userId: userId,
-      employeeId: `CM-${userId.substring(0, 8).toUpperCase()}`, // Placeholder
-      designation: "Collection Manager", // Default
-      productsAssigned: [], // Default
+      employeeId: `CM-${userId.substring(0, 8).toUpperCase()}`,
+      designation: "Collection Manager",
+      productsAssigned: [],
     },
   });
 
   return newProfile;
 }
-
 
 /**
  * Get Collection Manager Profile
@@ -114,10 +108,8 @@ export async function getCMProfileAction() {
   }
 
   try {
-    // 1. Get or Create the profile
     const cmProfile = await getOrCreateCMProfile(session.user.id);
 
-    // 2. Get Supervisor info if it exists
     let supervisorInfo = null;
     if (cmProfile.supervisorId) {
       supervisorInfo = await prisma.collectionManagerProfile.findUnique({
@@ -126,7 +118,6 @@ export async function getCMProfileAction() {
       });
     }
 
-    // 3. Format and return the real profile data
     const profile: CMProfile = {
       id: cmProfile.id,
       name: session.user.name,
@@ -181,10 +172,8 @@ export async function getCMAgenciesAction(searchQuery?: string) {
       orderBy: { name: 'asc' },
     });
 
-    // ... (rest of the stat logic is correct and remains unchanged) ...
     const agenciesWithStats = await Promise.all(
       agencies.map(async (agency) => {
-        // Count total submissions across all form types
         const [
           codeOfConductCount,
           declarationCount,
@@ -204,7 +193,7 @@ export async function getCMAgenciesAction(searchQuery?: string) {
           prisma.codeOfConduct.count({ where: { userId: agency.id, status: 'SUBMITTED' } }),
           prisma.declarationCumUndertaking.count({ where: { userId: agency.id, status: 'SUBMITTED' } }),
           prisma.agencyVisit.count({ where: { agencyId: agency.id, status: 'SUBMITTED' } }),
-          prisma.monthlyCompliance.count({ where: { userId: agency.id, status: 'SUBMITTED' } }),
+          prisma.monthlyCompliance.count({ where: { agencyId: agency.id, status: 'SUBMITTED' } }),
           prisma.assetManagement.count({ where: { userId: agency.id, status: 'SUBMITTED' } }),
           prisma.telephoneDeclaration.count({ where: { userId: agency.id, status: 'SUBMITTED' } }),
           prisma.agencyManpowerRegister.count({ where: { userId: agency.id, status: 'SUBMITTED' } }),
@@ -223,24 +212,22 @@ export async function getCMAgenciesAction(searchQuery?: string) {
           penaltyCount + trainingCount + proactiveCount + escalationCount +
           paymentCount + repoKitCount;
 
-        // Get most recent submission date
         const recentForms = await Promise.all([
           prisma.codeOfConduct.findFirst({ where: { userId: agency.id, status: 'SUBMITTED' }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
           prisma.declarationCumUndertaking.findFirst({ where: { userId: agency.id, status: 'SUBMITTED' }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
           prisma.agencyVisit.findFirst({ where: { agencyId: agency.id, status: 'SUBMITTED' }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
-          prisma.monthlyCompliance.findFirst({ where: { userId: agency.id, status: 'SUBMITTED' }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
+          prisma.monthlyCompliance.findFirst({ where: { agencyId: agency.id, status: 'SUBMITTED' }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
         ]);
 
         const lastSubmissionDate = recentForms
           .filter((f): f is { updatedAt: Date } => f !== null)
           .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0]?.updatedAt || null;
 
-        // Count pending forms (drafts)
         const pendingForms = await prisma.$transaction([
           prisma.codeOfConduct.count({ where: { userId: agency.id, status: 'DRAFT' } }),
           prisma.declarationCumUndertaking.count({ where: { userId: agency.id, status: 'DRAFT' } }),
           prisma.agencyVisit.count({ where: { agencyId: agency.id, status: 'DRAFT' } }),
-          prisma.monthlyCompliance.count({ where: { userId: agency.id, status: 'DRAFT' } }),
+          prisma.monthlyCompliance.count({ where: { agencyId: agency.id, status: 'DRAFT' } }),
         ]);
 
         const totalPending = pendingForms.reduce((sum, count) => sum + count, 0);
@@ -292,10 +279,8 @@ export async function getCMAgencyDetailAction(agencyId: string) {
       return { error: "Agency not found" };
     }
 
-    // ... (rest of the logic is correct and remains unchanged) ...
     const recentSubmissions = [];
 
-    // Code of Conduct
     const codeOfConductForms = await prisma.codeOfConduct.findMany({
       where: { userId: agencyId, status: 'SUBMITTED' },
       select: { id: true, createdAt: true, status: true },
@@ -310,7 +295,6 @@ export async function getCMAgencyDetailAction(agencyId: string) {
       id: f.id,
     })));
 
-    // Declaration Cum Undertaking
     const declarationForms = await prisma.declarationCumUndertaking.findMany({
       where: { userId: agencyId, status: 'SUBMITTED' },
       select: { id: true, createdAt: true, status: true },
@@ -325,7 +309,6 @@ export async function getCMAgencyDetailAction(agencyId: string) {
       id: f.id,
     })));
 
-    // Agency Visits
     const agencyVisitForms = await prisma.agencyVisit.findMany({
       where: { agencyId: agencyId, status: 'SUBMITTED' },
       select: { id: true, createdAt: true, status: true },
@@ -340,11 +323,9 @@ export async function getCMAgencyDetailAction(agencyId: string) {
       id: f.id,
     })));
 
-    // Sort by date and take top 10
     recentSubmissions.sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime());
     const topRecentSubmissions = recentSubmissions.slice(0, 10);
 
-    // Calculate monthly history (last 6 months)
     const monthlyHistory = [];
     const now = new Date();
     
@@ -356,19 +337,18 @@ export async function getCMAgencyDetailAction(agencyId: string) {
       const startDate = new Date(year, targetDate.getMonth(), 1);
       const endDate = new Date(year, targetDate.getMonth() + 1, 0, 23, 59, 59);
 
-      // Count forms for this month
       const monthForms = await Promise.all([
         prisma.codeOfConduct.count({ where: { userId: agencyId, createdAt: { gte: startDate, lte: endDate } } }),
         prisma.declarationCumUndertaking.count({ where: { userId: agencyId, createdAt: { gte: startDate, lte: endDate } } }),
         prisma.agencyVisit.count({ where: { agencyId: agencyId, createdAt: { gte: startDate, lte: endDate } } }),
-        prisma.monthlyCompliance.count({ where: { userId: agencyId, createdAt: { gte: startDate, lte: endDate } } }),
+        prisma.monthlyCompliance.count({ where: { agencyId: agencyId, createdAt: { gte: startDate, lte: endDate } } }),
       ]);
 
       const submittedForms = await Promise.all([
         prisma.codeOfConduct.count({ where: { userId: agencyId, status: 'SUBMITTED', createdAt: { gte: startDate, lte: endDate } } }),
         prisma.declarationCumUndertaking.count({ where: { userId: agencyId, status: 'SUBMITTED', createdAt: { gte: startDate, lte: endDate } } }),
         prisma.agencyVisit.count({ where: { agencyId: agencyId, status: 'SUBMITTED', createdAt: { gte: startDate, lte: endDate } } }),
-        prisma.monthlyCompliance.count({ where: { userId: agencyId, status: 'SUBMITTED', createdAt: { gte: startDate, lte: endDate } } }),
+        prisma.monthlyCompliance.count({ where: { agencyId: agencyId, status: 'SUBMITTED', createdAt: { gte: startDate, lte: endDate } } }),
       ]);
 
       const totalForms = monthForms.reduce((sum, count) => sum + count, 0);
@@ -384,7 +364,6 @@ export async function getCMAgencyDetailAction(agencyId: string) {
       });
     }
 
-    // Calculate basic stats
     const totalSubmissions = recentSubmissions.length;
     const lastSubmissionDate = topRecentSubmissions[0]?.submittedAt || null;
 
@@ -392,7 +371,7 @@ export async function getCMAgencyDetailAction(agencyId: string) {
       prisma.codeOfConduct.count({ where: { userId: agencyId, status: 'DRAFT' } }),
       prisma.declarationCumUndertaking.count({ where: { userId: agencyId, status: 'DRAFT' } }),
       prisma.agencyVisit.count({ where: { agencyId: agencyId, status: 'DRAFT' } }),
-      prisma.monthlyCompliance.count({ where: { userId: agencyId, status: 'DRAFT' } }),
+      prisma.monthlyCompliance.count({ where: { agencyId: agencyId, status: 'DRAFT' } }),
     ]);
     const totalPending = pendingForms.reduce((sum, count) => sum + count, 0);
 
@@ -433,12 +412,11 @@ export async function getCMAgencyFormStatusAction(agencyId: string, month: numbe
 
     const formStatuses: Record<string, FormStatusByMonth> = {};
 
-    // Check each major form type
     const formTypes = [
       { key: 'codeOfConduct', title: 'Code of Conduct', model: prisma.codeOfConduct, userField: 'userId', deadlineDay: 5 },
       { key: 'declarationCumUndertaking', title: 'Declaration Cum Undertaking', model: prisma.declarationCumUndertaking, userField: 'userId', deadlineDay: 5 },
       { key: 'agencyVisits', title: 'Agency Visit Details', model: prisma.agencyVisit, userField: 'agencyId', deadlineDay: 5 },
-      { key: 'monthlyCompliance', title: 'Monthly Compliance', model: prisma.monthlyCompliance, userField: 'userId', deadlineDay: 5 },
+      { key: 'monthlyCompliance', title: 'Monthly Compliance', model: prisma.monthlyCompliance, userField: 'agencyId', deadlineDay: 5 },
       { key: 'assetManagement', title: 'Asset Management', model: prisma.assetManagement, userField: 'userId', deadlineDay: 5 },
       { key: 'telephoneDeclaration', title: 'Telephone Declaration', model: prisma.telephoneDeclaration, userField: 'userId', deadlineDay: 5 },
     ];
@@ -494,14 +472,13 @@ export async function getCMAgencyFormStatusAction(agencyId: string, month: numbe
   }
 }
 
-// *** UPDATED AssignedAgencyInfo INTERFACE ***
 export interface AssignedAgencyInfo extends AgencyBasicInfo {
   assignment: {
-    id: string; // This is the assignment ID
+    id: string;
     assignedAt: Date;
     viewedByAt: Date | null; 
-    isActive: boolean; // Added for status
-    updatedAt: Date; // Added for end date
+    isActive: boolean;
+    updatedAt: Date;
   };
 }
 
@@ -517,10 +494,8 @@ export async function getAssignedAgenciesForCMAction() {
   }
 
   try {
-    // 1. Find or create the CM's profile
     const cmProfile = await getOrCreateCMProfile(session.user.id);
 
-    // 2. Find all active and inactive assignments for this CM
     const assignments = await prisma.cMAgencyAssignment.findMany({
       where: {
         cmProfileId: cmProfile.id,
@@ -545,17 +520,15 @@ export async function getAssignedAgenciesForCMAction() {
       }
     });
 
-    // 3. Get submission stats for each assigned agency
     const agenciesWithStats = await Promise.all(
       assignments.map(async (assignment) => {
         const { agency } = assignment;
 
-        // ... (submission stat logic remains unchanged) ...
         const submissionCounts = await Promise.all([
           prisma.codeOfConduct.count({ where: { userId: agency.id, status: 'SUBMITTED' } }),
           prisma.declarationCumUndertaking.count({ where: { userId: agency.id, status: 'SUBMITTED' } }),
           prisma.agencyVisit.count({ where: { agencyId: agency.id, status: 'SUBMITTED' } }),
-          prisma.monthlyCompliance.count({ where: { userId: agency.id, status: 'SUBMITTED' } }),
+          prisma.monthlyCompliance.count({ where: { agencyId: agency.id, status: 'SUBMITTED' } }),
           prisma.assetManagement.count({ where: { userId: agency.id, status: 'SUBMITTED' } }),
           prisma.telephoneDeclaration.count({ where: { userId: agency.id, status: 'SUBMITTED' } }),
           prisma.agencyManpowerRegister.count({ where: { userId: agency.id, status: 'SUBMITTED' } }),
@@ -573,7 +546,7 @@ export async function getAssignedAgenciesForCMAction() {
           prisma.codeOfConduct.findFirst({ where: { userId: agency.id, status: 'SUBMITTED' }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
           prisma.declarationCumUndertaking.findFirst({ where: { userId: agency.id, status: 'SUBMITTED' }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
           prisma.agencyVisit.findFirst({ where: { agencyId: agency.id, status: 'SUBMITTED' }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
-          prisma.monthlyCompliance.findFirst({ where: { userId: agency.id, status: 'SUBMITTED' }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
+          prisma.monthlyCompliance.findFirst({ where: { agencyId: agency.id, status: 'SUBMITTED' }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
         ]);
         
         const lastSubmissionDate = recentForms
@@ -584,7 +557,7 @@ export async function getAssignedAgenciesForCMAction() {
           prisma.codeOfConduct.count({ where: { userId: agency.id, status: 'DRAFT' } }),
           prisma.declarationCumUndertaking.count({ where: { userId: agency.id, status: 'DRAFT' } }),
           prisma.agencyVisit.count({ where: { agencyId: agency.id, status: 'DRAFT' } }),
-          prisma.monthlyCompliance.count({ where: { userId: agency.id, status: 'DRAFT' } }),
+          prisma.monthlyCompliance.count({ where: { agencyId: agency.id, status: 'DRAFT' } }),
         ]);
         const totalPending = pendingForms.reduce((sum, count) => sum + count, 0);
 
@@ -645,7 +618,6 @@ export async function getCollectionManagersSummaryAction() {
       orderBy: { name: 'asc' },
     });
 
-    // Flatten the response
     const managersWithStats = managers.map(m => ({
         id: m.id,
         name: m.name,
@@ -736,7 +708,6 @@ export async function updateCMAssignmentsAction(cmUserId: string, assignedAgency
         const cmProfileId = cmProfile.id;
 
         await prisma.$transaction(async (tx) => {
-            // Deactivate assignments
             if (unassignedAgencyIds.length > 0) {
                 await tx.cMAgencyAssignment.updateMany({ 
                     where: {
@@ -747,7 +718,6 @@ export async function updateCMAssignmentsAction(cmUserId: string, assignedAgency
                 });
             }
 
-            // Create or reactivate assignments
             if (assignedAgencyIds.length > 0) {
                 for (const agencyId of assignedAgencyIds) {
                     await tx.cMAgencyAssignment.upsert({ 
@@ -812,8 +782,6 @@ export async function markCMAssignmentsAsViewedAction(assignmentIds: string[]) {
   }
 }
 
-// *** ACTION FOR AGENCY APPROVALS PAGE ***
-
 export interface CMAgencyApproval {
   id: string;
   createdAt: Date;
@@ -837,10 +805,8 @@ export async function getCMAgencyApprovalsAction(agencyId: string) {
   }
 
   try {
-    // 1. Find or create the CM's profile
     const cmProfile = await getOrCreateCMProfile(session.user.id); 
 
-    // 2. Find the agency
     const agency = await prisma.user.findUnique({
       where: { id: agencyId, role: UserRole.USER },
       select: { id: true, name: true, email: true }
@@ -850,7 +816,6 @@ export async function getCMAgencyApprovalsAction(agencyId: string) {
       return { error: "Agency not found." };
     }
 
-    // 3. Find all approvals given by this CM to this Agency, but only one per form
     const approvals = await prisma.cMApproval.findMany({
       where: {
         cmProfileId: cmProfile.id,
@@ -862,7 +827,6 @@ export async function getCMAgencyApprovalsAction(agencyId: string) {
       distinct: ['formId', 'formType']
     });
 
-    // 4. Format approvals with user-friendly form titles
     const formattedApprovals: CMAgencyApproval[] = approvals.map(approval => {
       const formConfig = FORM_CONFIGS[approval.formType as keyof typeof FORM_CONFIGS];
       return {
@@ -885,21 +849,16 @@ export async function getCMAgencyApprovalsAction(agencyId: string) {
   }
 }
 
-
-// *** NEW ACTION FOR MODAL ***
-
-// This defines the shape of the data returned by the ...ForAdmin functions
 type AdminFormData = {
   id: string;
   status: string;
-  createdAt?: Date; // FIX: Make optional
+  createdAt?: Date;
   formTitle?: string; 
   details: { id: string, [key: string]: unknown }[];
   agencyInfo?: { userId: string; name: string; email: string };
   [key: string]: unknown; 
 } | null;
 
-// This defines the approval data returned by this action
 export type ApprovalWithDetails = CMApproval & {
   details: {
     employeeName: string;
@@ -919,10 +878,8 @@ export async function getCMAgencyFormDetailsAction(formId: string, formType: For
   }
 
   try {
-    // 1. Get the CM's profile
     const cmProfile = await getOrCreateCMProfile(session.user.id); 
 
-    // 2. Fetch the full form data using the admin actions
     let formData: AdminFormData = null; 
     const formConfig = FORM_CONFIGS[formType];
     
@@ -965,10 +922,8 @@ export async function getCMAgencyFormDetailsAction(formId: string, formType: For
       return { error: "Form not found." };
     }
     
-    // Manually add the formTitle to the formData object
     formData.formTitle = formConfig?.title || formType;
     
-    // FIX (ts2769): Check if date exists and is valid before creating new Date
     if (!formData.createdAt && formData.details?.[0]?.date) {
         const dateValue = formData.details[0].date;
         if (typeof dateValue === 'string' || typeof dateValue === 'number') {
@@ -976,7 +931,6 @@ export async function getCMAgencyFormDetailsAction(formId: string, formType: For
         }
     }
 
-    // 3. Fetch all of *this CM's* approvals for *this form*
     const approvals = await prisma.cMApproval.findMany({
       where: {
         cmProfileId: cmProfile.id,
@@ -987,11 +941,9 @@ export async function getCMAgencyFormDetailsAction(formId: string, formType: For
       }
     });
     
-    // 4. Find the specific rows that were approved (for forms like AgencyVisit)
     let approvedRowDetails: Record<string, { employeeName: string; purposeOfVisit: string }> = {};
     if (formType === 'agencyVisits' && formData.details) {
       const approvedRowIds = approvals.map(a => a.rowId).filter(Boolean) as string[];
-      // FIX (ts2352): Use 'as unknown as' for a strong cast
       const rows = formData.details as unknown as (AgencyTableRow & { id: string })[];
       approvedRowDetails = rows
         .filter(row => approvedRowIds.includes(String(row.id)))
@@ -1004,12 +956,11 @@ export async function getCMAgencyFormDetailsAction(formId: string, formType: For
         }, {} as Record<string, { employeeName: string; purposeOfVisit: string }>);
     }
     
-    // 5. Combine approval with row details and add formTitle
     const combinedApprovals: ApprovalWithDetails[] = approvals.map(approval => {
       const formConfig = FORM_CONFIGS[approval.formType as keyof typeof FORM_CONFIGS];
       return {
         ...approval,
-        formTitle: formConfig?.title || approval.formType, // Add formTitle to match type
+        formTitle: formConfig?.title || approval.formType,
         details: (approval.rowId && approvedRowDetails[approval.rowId])
           ? approvedRowDetails[approval.rowId] 
           : null
