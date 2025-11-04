@@ -7,20 +7,22 @@ import { AlertCircle } from "lucide-react";
 import React from "react";
 
 interface AuditObservationPageProps {
-  params: {
+  params: Promise<{ // <-- FIX: Wrap in Promise to match your project's pattern
     agencyId: string;
     auditId: string;
-  };
+  }>;
 }
 
 export default async function AuditObservationPage({ params }: AuditObservationPageProps) {
-  const result = await getAuditObservationDataAction(params.auditId);
+  const { agencyId, auditId } = await params; // <-- FIX: Await the params
+  
+  const result = await getAuditObservationDataAction(auditId);
 
   if (result.error) {
     return (
       <div className="container mx-auto p-8">
         <PageHeader 
-            returnHref={`/auditor/agencies/${params.agencyId}`} 
+            returnHref={`/auditor/agencies/${agencyId}`} 
             returnLabel="Back to Agency" 
         />
         <Alert variant="destructive" className="mt-8">
@@ -35,7 +37,7 @@ export default async function AuditObservationPage({ params }: AuditObservationP
   return (
     <div className="container mx-auto p-8">
         <PageHeader 
-            returnHref={`/auditor/agencies/${params.agencyId}`} 
+            returnHref={`/auditor/agencies/${agencyId}`} 
             returnLabel={`Back to ${result.audit!.agency.name}`} 
         />
         <ObservationForm 

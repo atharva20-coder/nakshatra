@@ -6,13 +6,15 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 
 interface AgencyAuditPageProps {
-  params: {
+  params: Promise<{ // <-- FIX: Wrap in Promise
     agencyId: string;
-  };
+  }>;
 }
 
 export default async function AgencyAuditPage({ params }: AgencyAuditPageProps) {
-  const result = await getAgencyAuditHistoryAction(params.agencyId);
+  const { agencyId } = await params; // <-- FIX: Await the params
+
+  const result = await getAgencyAuditHistoryAction(agencyId);
 
   if (result.error) {
     return (
