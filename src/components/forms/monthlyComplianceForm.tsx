@@ -1,4 +1,5 @@
 // src/components/forms/MonthlyComplianceForm.tsx
+// IMPORTANT: This file MUST be named MonthlyComplianceForm.tsx (capital M)
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -186,7 +187,6 @@ export const MonthlyComplianceForm = ({
     setIsModalOpen(true);
   };
 
-  // Helper to check if approval data is valid
   const isValidApproval = (approvalData: string | null): boolean => {
     if (!approvalData) return false;
     try {
