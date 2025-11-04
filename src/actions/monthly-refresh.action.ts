@@ -27,6 +27,7 @@ const prismaModelMap: Record<FormType, keyof typeof prisma> = {
   escalationDetails: "escalationDetails",
   paymentRegister: "paymentRegister",
   repoKitTracker: "repoKitTracker",
+  noDuesDeclaration:'noDuesDeclaration',
 };
 
 /** Safely get a typed Prisma delegate for a given FormType */
