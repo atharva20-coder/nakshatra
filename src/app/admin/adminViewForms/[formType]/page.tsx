@@ -1,3 +1,4 @@
+// src/app/admin/adminViewForms/[formType]/page.tsx
 import { PageHeader } from "@/components/agency-page-header";
 import { AgencyVisitForm } from "@/components/forms/AgencyVisitForm";
 import { AssetManagementForm } from "@/components/forms/AssetManagementForm";
@@ -5,7 +6,7 @@ import { CodeOfConductForm } from "@/components/forms/CodeOfConductForm";
 import { DeclarationCumUndertakingForm } from "@/components/forms/DeclarationCumUndertakingForm";
 import { EscalationDetailsForm } from "@/components/forms/EscalationDetailsForm";
 import { ManpowerRegisterForm } from "@/components/forms/ManpowerRegisterForm";
-//import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm";
+import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm"; // <-- *** FIX: Corrected casing ***
 import { PaymentRegisterForm } from "@/components/forms/PaymentRegisterForm";
 import { PenaltyMatrixForm } from "@/components/forms/PenaltyMatrixForm";
 import { ProactiveEscalationForm } from "@/components/forms/ProactiveEscalationForm";
@@ -32,9 +33,9 @@ const renderForm = async (formType: FormType) => {
             return <CodeOfConductForm />;
         case 'declarationCumUndertaking':
             return <DeclarationCumUndertakingForm />;
-//        case 'monthlyCompliance': {
-//            return <MonthlyComplianceForm />;
-//        }
+       case 'monthlyCompliance': {
+           return <MonthlyComplianceForm />;
+       }
         case 'assetManagement':
             return <AssetManagementForm />;
         case 'telephoneDeclaration':

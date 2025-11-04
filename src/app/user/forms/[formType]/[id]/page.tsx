@@ -24,7 +24,8 @@ import { getProactiveEscalationById } from "@/actions/proactive-escalation.actio
 import { getPaymentRegisterById } from "@/actions/payment-register.action";
 import { getEscalationDetailsById } from "@/actions/escalation-details.action"; // Import new action
 import { getRepoKitTrackerById } from "@/actions/repo-kit-tracker.action"; // Import RepoKit action
-
+import { getMonthlyComplianceById } from "@/actions/monthly-compliance.action"; // <-- ADD IMPORT
+import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm";
 import { FORM_CONFIGS } from "@/types/forms";
 
 type FormType = keyof typeof FORM_CONFIGS;
@@ -53,6 +54,13 @@ const renderForm = async (formType: FormType, id: string) => {
             if (!submission) notFound();
             return <DeclarationCumUndertakingForm initialData={submission} />;
         }
+        // --- ADD NEW CASE ---
+        case 'monthlyCompliance': {
+            const submission = await getMonthlyComplianceById(id);
+            if (!submission) notFound();
+            return <MonthlyComplianceForm initialData={submission} />;
+        }
+        // --- END NEW CASE ---
         case 'assetManagement': {
             const submission = await getAssetManagementById(id);
             if (!submission) notFound();

@@ -13,9 +13,9 @@ import { AgencyVisitForm } from "@/components/forms/AgencyVisitForm";
 import { AssetManagementForm } from "@/components/forms/AssetManagementForm";
 import { CodeOfConductForm } from "@/components/forms/CodeOfConductForm";
 import { DeclarationCumUndertakingForm } from "@/components/forms/DeclarationCumUndertakingForm";
-import { EscalationDetailsForm } from "@/components/forms/EscalationDetailsForm"; // Uncommented
+import { EscalationDetailsForm } from "@/components/forms/EscalationDetailsForm"; 
 import { ManpowerRegisterForm } from "@/components/forms/ManpowerRegisterForm";
-// import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm";
+import { MonthlyComplianceForm } from "@/components/forms/monthlyComplianceForm";
 import { PaymentRegisterForm } from "@/components/forms/PaymentRegisterForm";
 // import { PenaltyMatrixForm } from "@/components/forms/PenaltyMatrixForm";
 import { ProactiveEscalationForm } from "@/components/forms/ProactiveEscalationForm";
@@ -29,9 +29,9 @@ import { getAgencyVisitByIdForAdmin } from "@/actions/agency-visit.action";
 import { getAssetManagementByIdForAdmin } from "@/actions/asset-management.action";
 import { getCodeOfConductByIdForAdmin } from "@/actions/code-of-conduct.action";
 import { getDeclarationByIdForAdmin } from "@/actions/declaration-cum-undertaking.action";
-import { getEscalationDetailsByIdForAdmin } from "@/actions/escalation-details.action"; // Uncommented
+import { getEscalationDetailsByIdForAdmin } from "@/actions/escalation-details.action"; 
 import { getManpowerRegisterByIdForAdmin } from "@/actions/manpower-register.action";
-// import { getMonthlyComplianceByIdForAdmin } from "@/actions/monthly-compliance.action";
+import { getMonthlyComplianceByIdForAdmin } from "@/actions/monthly-compliance.action"; // <-- ADD IMPORT
 import { getPaymentRegisterByIdForAdmin } from "@/actions/payment-register.action";
 // import { getPenaltyMatrixByIdForAdmin } from "@/actions/penalty-matrix.action";
 import { getProactiveEscalationByIdForAdmin } from "@/actions/proactive-escalation.action";
@@ -61,7 +61,8 @@ const renderAdminFormView = async (formType: FormType, id: string) => {
                   Awaited<ReturnType<typeof getProactiveEscalationByIdForAdmin>> |
                   Awaited<ReturnType<typeof getPaymentRegisterByIdForAdmin>> |
                   Awaited<ReturnType<typeof getRepoKitTrackerByIdForAdmin>> |
-                  Awaited<ReturnType<typeof getEscalationDetailsByIdForAdmin>> | // Added new type
+                  Awaited<ReturnType<typeof getEscalationDetailsByIdForAdmin>> | 
+                  Awaited<ReturnType<typeof getMonthlyComplianceByIdForAdmin>> | // <-- ADD TYPE
                   null = null;
 
   // Call the appropriate ADMIN fetch action based on formType
@@ -111,10 +112,10 @@ const renderAdminFormView = async (formType: FormType, id: string) => {
       if (!submission) notFound();
       return <EscalationDetailsForm initialData={submission} isAdminView={true} />;
     // --- ADD CASES FOR THE REMAINING FORMS ---
-    // case 'monthlyCompliance':
-    //   submission = await getMonthlyComplianceByIdForAdmin(id);
-    //   if (!submission) notFound();
-    //   return <MonthlyComplianceForm initialData={submission} isAdminView={true} />;
+    case 'monthlyCompliance': // <-- UNCOMMENTED
+      submission = await getMonthlyComplianceByIdForAdmin(id);
+      if (!submission) notFound();
+      return <MonthlyComplianceForm initialData={submission} isAdminView={true} />;
     // case 'penaltyMatrix':
     //   submission = await getPenaltyMatrixByIdForAdmin(id);
     //   if (!submission) notFound();
@@ -145,7 +146,7 @@ async function getFormData(formType: FormType, id: string) {
         case 'repoKitTracker': return await getRepoKitTrackerByIdForAdmin(id);
         case 'escalationDetails': return await getEscalationDetailsByIdForAdmin(id); // Uncommented
         // --- ADD CASES FOR THE REMAINING FORMS ---
-        // case 'monthlyCompliance': return await getMonthlyComplianceByIdForAdmin(id);
+        case 'monthlyCompliance': return await getMonthlyComplianceByIdForAdmin(id); // <-- ADD CASE
         // case 'penaltyMatrix': return await getPenaltyMatrixByIdForAdmin(id);
         // case 'trainingTracker': return await getTrainingTrackerByIdForAdmin(id);
         default: return null;
