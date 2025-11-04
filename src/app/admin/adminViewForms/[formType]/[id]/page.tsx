@@ -21,6 +21,7 @@ import { ProactiveEscalationForm } from "@/components/forms/ProactiveEscalationF
 import { ProductDeclarationForm } from "@/components/forms/ProductDeclarationForm";
 import { RepoKitTrackerForm } from "@/components/forms/RepoKitTrackerForm";
 import { TelephoneDeclarationForm } from "@/components/forms/TelephoneDeclarationForm";
+import { NoDuesDeclarationForm } from "@/components/forms/NoDuesDeclarationForm"; // <-- ADD IMPORT
 
 // Import ALL Admin Fetch Actions
 import { getAgencyVisitByIdForAdmin } from "@/actions/agency-visit.action";
@@ -35,6 +36,8 @@ import { getProactiveEscalationByIdForAdmin } from "@/actions/proactive-escalati
 import { getProductDeclarationByIdForAdmin } from "@/actions/product-declaration.action";
 import { getRepoKitTrackerByIdForAdmin } from "@/actions/repo-kit-tracker.action";
 import { getTelephoneDeclarationByIdForAdmin } from "@/actions/telephone-declaration.action";
+import { getNoDuesDeclarationByIdForAdmin } from "@/actions/no-dues-declaration.action"; // <-- ADD IMPORT
+
 
 type FormType = keyof typeof FORM_CONFIGS;
 
@@ -59,6 +62,7 @@ const renderAdminFormView = async (formType: FormType, id: string) => {
                   Awaited<ReturnType<typeof getRepoKitTrackerByIdForAdmin>> |
                   Awaited<ReturnType<typeof getEscalationDetailsByIdForAdmin>> | 
                   Awaited<ReturnType<typeof getMonthlyComplianceByIdForAdmin>> |
+                  Awaited<ReturnType<typeof getNoDuesDeclarationByIdForAdmin>> | // <-- ADD TYPE
                   null = null;
 
   // Call the appropriate ADMIN fetch action based on formType
@@ -111,6 +115,10 @@ const renderAdminFormView = async (formType: FormType, id: string) => {
       submission = await getMonthlyComplianceByIdForAdmin(id);
       if (!submission) notFound();
       return <MonthlyComplianceForm initialData={submission} isAdminView={true} />;
+    case 'noDuesDeclaration':
+      submission = await getNoDuesDeclarationByIdForAdmin(id);
+      if (!submission) notFound();
+      return <NoDuesDeclarationForm initialData={submission} isAdminView={true} />;
     default:
         console.error(`Admin view not implemented for form type: ${formType}`);
         notFound();
@@ -132,6 +140,7 @@ async function getFormData(formType: FormType, id: string) {
         case 'repoKitTracker': return await getRepoKitTrackerByIdForAdmin(id);
         case 'escalationDetails': return await getEscalationDetailsByIdForAdmin(id);
         case 'monthlyCompliance': return await getMonthlyComplianceByIdForAdmin(id);
+        case 'noDuesDeclaration': return await getNoDuesDeclarationByIdForAdmin(id);
         default: return null;
     }
 }

@@ -14,6 +14,7 @@ import { ProductDeclarationForm } from "@/components/forms/ProductDeclarationFor
 import { RepoKitTrackerForm } from "@/components/forms/RepoKitTrackerForm";
 import { TelephoneDeclarationForm } from "@/components/forms/TelephoneDeclarationForm";
 import { TrainingTrackerForm } from "@/components/forms/TrainingTrackerForm";
+import { NoDuesDeclarationForm } from "@/components/forms/NoDuesDeclarationForm"; // <-- ADD IMPORT
 import { FORM_CONFIGS, FormType } from "@/types/forms";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
@@ -56,6 +57,8 @@ const renderForm = async (formType: FormType) => {
             return <PaymentRegisterForm />;
         case 'repoKitTracker':
             return <RepoKitTrackerForm />;
+        case 'noDuesDeclaration':
+            return <NoDuesDeclarationForm />;
         default:
             notFound();
     }

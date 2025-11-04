@@ -12,6 +12,8 @@ import { PaymentRegisterForm } from "@/components/forms/PaymentRegisterForm";
 import { CodeOfConductForm } from "@/components/forms/CodeOfConductForm";
 import { EscalationDetailsForm } from "@/components/forms/EscalationDetailsForm"; // Import new form
 import { RepoKitTrackerForm } from "@/components/forms/RepoKitTrackerForm"; // Import RepoKit
+import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm";
+import { NoDuesDeclarationForm } from "@/components/forms/NoDuesDeclarationForm";
 
 import { getCodeOfConductById } from "@/actions/code-of-conduct.action";
 import { getAgencyVisitById } from "@/actions/agency-visit.action";
@@ -25,7 +27,7 @@ import { getPaymentRegisterById } from "@/actions/payment-register.action";
 import { getEscalationDetailsById } from "@/actions/escalation-details.action"; // Import new action
 import { getRepoKitTrackerById } from "@/actions/repo-kit-tracker.action"; // Import RepoKit action
 import { getMonthlyComplianceById } from "@/actions/monthly-compliance.action"; // <-- ADD IMPORT
-import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm";
+import { getNoDuesDeclarationById } from "@/actions/no-dues-declaration.action";
 import { FORM_CONFIGS } from "@/types/forms";
 
 type FormType = keyof typeof FORM_CONFIGS;
@@ -100,6 +102,11 @@ const renderForm = async (formType: FormType, id: string) => {
             const submission = await getEscalationDetailsById(id);
             if (!submission) notFound();
             return <EscalationDetailsForm initialData={submission} />;
+        }
+        case 'noDuesDeclaration': {
+            const submission = await getNoDuesDeclarationById(id);
+            if (!submission) notFound();
+            return <NoDuesDeclarationForm initialData={submission} />;
         }
         // Add other forms as needed
         default:

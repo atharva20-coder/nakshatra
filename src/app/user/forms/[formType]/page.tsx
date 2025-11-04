@@ -17,6 +17,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm";
+import { NoDuesDeclarationForm } from "@/components/forms/NoDuesDeclarationForm";
 
 interface NewFormPageProps {
     params: Promise<{
@@ -55,6 +56,8 @@ const renderForm = async (formType: FormType) => {
             return <PaymentRegisterForm />;
         case 'repoKitTracker':
             return <RepoKitTrackerForm />;
+        case 'noDuesDeclaration':
+            return <NoDuesDeclarationForm />;
         default:
             notFound();
     }

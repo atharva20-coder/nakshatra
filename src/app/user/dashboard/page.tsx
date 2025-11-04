@@ -26,7 +26,8 @@ const FORM_TABLE_MAPPINGS = {
   proactiveEscalation: 'proactiveEscalationTracker',
   escalationDetails: 'escalationDetails',
   paymentRegister: 'paymentRegister',
-  repoKitTracker: 'repoKitTracker'
+  repoKitTracker: 'repoKitTracker',
+  noDuesDeclaration: 'noDuesDeclaration',
 } as const;
 
 interface FormStatus {
@@ -134,6 +135,12 @@ async function getUserFormStatuses(userId: string): Promise<FormStatus[]> {
             orderBy: { updatedAt: 'desc' }
           });
           break;
+        case 'noDuesDeclaration':
+          form = await prisma.noDuesDeclaration.findFirst({
+            where: { agencyId: userId },
+            orderBy: { updatedAt: 'desc' }
+          });
+        break;
       }
 
       // Determine if form is overdue
