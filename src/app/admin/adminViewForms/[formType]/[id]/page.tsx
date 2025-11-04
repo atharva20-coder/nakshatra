@@ -9,13 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 // Import ALL Form Components - FIXED: Consistent casing
+import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm"; // FIXED: Capital M
 import { AgencyVisitForm } from "@/components/forms/AgencyVisitForm";
 import { AssetManagementForm } from "@/components/forms/AssetManagementForm";
 import { CodeOfConductForm } from "@/components/forms/CodeOfConductForm";
 import { DeclarationCumUndertakingForm } from "@/components/forms/DeclarationCumUndertakingForm";
 import { EscalationDetailsForm } from "@/components/forms/EscalationDetailsForm"; 
 import { ManpowerRegisterForm } from "@/components/forms/ManpowerRegisterForm";
-import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm"; // FIXED: Capital M
 import { PaymentRegisterForm } from "@/components/forms/PaymentRegisterForm";
 import { ProactiveEscalationForm } from "@/components/forms/ProactiveEscalationForm";
 import { ProductDeclarationForm } from "@/components/forms/ProductDeclarationForm";
