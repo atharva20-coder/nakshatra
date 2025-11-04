@@ -1,4 +1,4 @@
-// src/app/admin/forms/[formType]/[id]/page.tsx
+// src/app/admin/adminViewForms/[formType]/[id]/page.tsx
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
@@ -8,21 +8,19 @@ import { FORM_CONFIGS } from "@/types/forms";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-// Import ALL Form Components
+// Import ALL Form Components - FIXED: Consistent casing
 import { AgencyVisitForm } from "@/components/forms/AgencyVisitForm";
 import { AssetManagementForm } from "@/components/forms/AssetManagementForm";
 import { CodeOfConductForm } from "@/components/forms/CodeOfConductForm";
 import { DeclarationCumUndertakingForm } from "@/components/forms/DeclarationCumUndertakingForm";
 import { EscalationDetailsForm } from "@/components/forms/EscalationDetailsForm"; 
 import { ManpowerRegisterForm } from "@/components/forms/ManpowerRegisterForm";
-import { MonthlyComplianceForm } from "@/components/forms/monthlyComplianceForm";
+import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm"; // FIXED: Capital M
 import { PaymentRegisterForm } from "@/components/forms/PaymentRegisterForm";
-// import { PenaltyMatrixForm } from "@/components/forms/PenaltyMatrixForm";
 import { ProactiveEscalationForm } from "@/components/forms/ProactiveEscalationForm";
 import { ProductDeclarationForm } from "@/components/forms/ProductDeclarationForm";
 import { RepoKitTrackerForm } from "@/components/forms/RepoKitTrackerForm";
 import { TelephoneDeclarationForm } from "@/components/forms/TelephoneDeclarationForm";
-// import { TrainingTrackerForm } from "@/components/forms/TrainingTrackerForm";
 
 // Import ALL Admin Fetch Actions
 import { getAgencyVisitByIdForAdmin } from "@/actions/agency-visit.action";
@@ -31,14 +29,12 @@ import { getCodeOfConductByIdForAdmin } from "@/actions/code-of-conduct.action";
 import { getDeclarationByIdForAdmin } from "@/actions/declaration-cum-undertaking.action";
 import { getEscalationDetailsByIdForAdmin } from "@/actions/escalation-details.action"; 
 import { getManpowerRegisterByIdForAdmin } from "@/actions/manpower-register.action";
-import { getMonthlyComplianceByIdForAdmin } from "@/actions/monthly-compliance.action"; // <-- ADD IMPORT
+import { getMonthlyComplianceByIdForAdmin } from "@/actions/monthly-compliance.action";
 import { getPaymentRegisterByIdForAdmin } from "@/actions/payment-register.action";
-// import { getPenaltyMatrixByIdForAdmin } from "@/actions/penalty-matrix.action";
 import { getProactiveEscalationByIdForAdmin } from "@/actions/proactive-escalation.action";
 import { getProductDeclarationByIdForAdmin } from "@/actions/product-declaration.action";
 import { getRepoKitTrackerByIdForAdmin } from "@/actions/repo-kit-tracker.action";
 import { getTelephoneDeclarationByIdForAdmin } from "@/actions/telephone-declaration.action";
-// import { getTrainingTrackerByIdForAdmin } from "@/actions/training-tracker.action";
 
 type FormType = keyof typeof FORM_CONFIGS;
 
@@ -62,7 +58,7 @@ const renderAdminFormView = async (formType: FormType, id: string) => {
                   Awaited<ReturnType<typeof getPaymentRegisterByIdForAdmin>> |
                   Awaited<ReturnType<typeof getRepoKitTrackerByIdForAdmin>> |
                   Awaited<ReturnType<typeof getEscalationDetailsByIdForAdmin>> | 
-                  Awaited<ReturnType<typeof getMonthlyComplianceByIdForAdmin>> | // <-- ADD TYPE
+                  Awaited<ReturnType<typeof getMonthlyComplianceByIdForAdmin>> |
                   null = null;
 
   // Call the appropriate ADMIN fetch action based on formType
@@ -107,23 +103,14 @@ const renderAdminFormView = async (formType: FormType, id: string) => {
         submission = await getRepoKitTrackerByIdForAdmin(id);
         if (!submission) notFound();
         return <RepoKitTrackerForm initialData={submission} isAdminView={true} />;
-    case 'escalationDetails': // Uncommented
+    case 'escalationDetails':
       submission = await getEscalationDetailsByIdForAdmin(id);
       if (!submission) notFound();
       return <EscalationDetailsForm initialData={submission} isAdminView={true} />;
-    // --- ADD CASES FOR THE REMAINING FORMS ---
-    case 'monthlyCompliance': // <-- UNCOMMENTED
+    case 'monthlyCompliance':
       submission = await getMonthlyComplianceByIdForAdmin(id);
       if (!submission) notFound();
       return <MonthlyComplianceForm initialData={submission} isAdminView={true} />;
-    // case 'penaltyMatrix':
-    //   submission = await getPenaltyMatrixByIdForAdmin(id);
-    //   if (!submission) notFound();
-    //   return <PenaltyMatrixForm initialData={submission} isAdminView={true} />;
-    // case 'trainingTracker':
-    //   submission = await getTrainingTrackerByIdForAdmin(id);
-    //   if (!submission) notFound();
-    //   return <TrainingTrackerForm initialData={submission} isAdminView={true} />;
     default:
         console.error(`Admin view not implemented for form type: ${formType}`);
         notFound();
@@ -132,7 +119,6 @@ const renderAdminFormView = async (formType: FormType, id: string) => {
 
 // Helper function to fetch data once to get agency info for the header
 async function getFormData(formType: FormType, id: string) {
-    // This needs to call the correct admin fetch action based on formType
     switch (formType) {
         case 'codeOfConduct': return await getCodeOfConductByIdForAdmin(id);
         case 'agencyVisits': return await getAgencyVisitByIdForAdmin(id);
@@ -144,15 +130,11 @@ async function getFormData(formType: FormType, id: string) {
         case 'proactiveEscalation': return await getProactiveEscalationByIdForAdmin(id);
         case 'paymentRegister': return await getPaymentRegisterByIdForAdmin(id);
         case 'repoKitTracker': return await getRepoKitTrackerByIdForAdmin(id);
-        case 'escalationDetails': return await getEscalationDetailsByIdForAdmin(id); // Uncommented
-        // --- ADD CASES FOR THE REMAINING FORMS ---
-        case 'monthlyCompliance': return await getMonthlyComplianceByIdForAdmin(id); // <-- ADD CASE
-        // case 'penaltyMatrix': return await getPenaltyMatrixByIdForAdmin(id);
-        // case 'trainingTracker': return await getTrainingTrackerByIdForAdmin(id);
+        case 'escalationDetails': return await getEscalationDetailsByIdForAdmin(id);
+        case 'monthlyCompliance': return await getMonthlyComplianceByIdForAdmin(id);
         default: return null;
     }
 }
-
 
 export default async function AdminViewFormPage({ params }: AdminViewFormPageProps) {
   const { formType, id } = await params;
@@ -184,10 +166,9 @@ export default async function AdminViewFormPage({ params }: AdminViewFormPagePro
   }
 
   const formMetadata = FORM_CONFIGS[formType];
-  const formData = await getFormData(formType, id); // Fetch data once
+  const formData = await getFormData(formType, id);
 
   if (!formData) {
-    // This handles cases where the form ID is invalid or the admin fetch function failed
     return (
        <div className="min-h-screen flex items-center justify-center p-4">
           <Card className="w-full max-w-md">
@@ -210,14 +191,12 @@ export default async function AdminViewFormPage({ params }: AdminViewFormPagePro
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-      {/* Header with Return Button */}
       <div className="p-4 bg-white dark:bg-gray-800 border-b dark:border-gray-700 sticky top-0 z-10">
         <ReturnButton href={agencyUserId ? `/admin/users/${agencyUserId}` : '/admin/forms'} label={`Back to ${agencyName}'s Profile`} />
       </div>
 
       <main className="p-8">
         <div className="container mx-auto">
-            {/* Display Agency Info */}
             <Card className="mb-6 bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700">
                <CardHeader>
                  <CardTitle className="text-lg text-blue-800 dark:text-blue-300">Viewing Submission For:</CardTitle>
@@ -229,10 +208,8 @@ export default async function AdminViewFormPage({ params }: AdminViewFormPagePro
                </CardContent>
             </Card>
 
-            {/* Title for the specific form being viewed */}
             <h1 className="text-2xl font-bold mb-4">{formMetadata.title}</h1>
 
-            {/* Render the specific form component in read-only mode */}
             {await renderAdminFormView(formType, id)}
         </div>
       </main>
