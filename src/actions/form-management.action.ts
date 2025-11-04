@@ -59,7 +59,8 @@ export async function getFormSubmissionsAction(): Promise<{ submissions?: FormSu
 
   try {
     const formPromises = (Object.keys(FORM_CONFIGS) as FormType[]).map(async (formType) => {
-      const modelName = FORM_CONFIGS[formType].id as keyof typeof prisma;
+      const config = FORM_CONFIGS[formType];
+      const modelName = (config as { id: keyof typeof prisma }).id;
       const prismaModel = (prisma as any)[modelName];
       if (!prismaModel) return [];
       
@@ -207,7 +208,7 @@ export async function getUserFormStatus(userId: string, month?: number, year?: n
         const config = FORM_CONFIGS[formType];
         if (!config.isRequired) return;
 
-        const modelName = config.id as keyof typeof prisma;
+        const modelName = (config as { id: keyof typeof prisma }).id;
         const prismaModel = (prisma as any)[modelName];
         if (!prismaModel) return;
 
@@ -270,7 +271,7 @@ export async function getAllSubmissionsForAdmin() {
 
     try {
         const formPromises = (Object.keys(FORM_CONFIGS) as FormType[]).map(async (formType) => {
-            const modelName = FORM_CONFIGS[formType].id as keyof typeof prisma;
+            const modelName = (FORM_CONFIGS[formType] as { id: keyof typeof prisma }).id;
             const prismaModel = (prisma as any)[modelName];
             if (!prismaModel) return [];
 
@@ -312,7 +313,7 @@ export async function getSubmissionsForUser(userId: string) {
     
     try {
         const formPromises = (Object.keys(FORM_CONFIGS) as FormType[]).map(async (formType) => {
-            const modelName = FORM_CONFIGS[formType].id as keyof typeof prisma;
+            const modelName = (FORM_CONFIGS[formType] as { id: keyof typeof prisma }).id;
             const prismaModel = (prisma as any)[modelName];
             if (!prismaModel) return [];
 
