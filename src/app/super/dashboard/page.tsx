@@ -9,7 +9,7 @@ import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { UserCheck, Settings, LinkIcon, FileText } from "lucide-react"; // Added FileText
+import { UserCheck, Settings, LinkIcon, FileText, Building } from "lucide-react"; // Added Building
 
 export default async function Page() {
   const headersList = await headers();
@@ -50,11 +50,6 @@ export default async function Page() {
     return 0;
   });
 
-  // Calculate user statistics
-  const totalUsers = users.length;
-  const adminCount = users.filter(user => user.role === "ADMIN" || user.role === "SUPER_ADMIN").length;
-  const standardUserCount = totalUsers - adminCount;
-
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
       <div className="px-8 py-12 container mx-auto max-w-screen-xl">
@@ -72,7 +67,7 @@ export default async function Page() {
         </div>
 
         {/* --- MANAGEMENT CARDS --- */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Audit Management</CardTitle>
@@ -84,7 +79,7 @@ export default async function Page() {
                 Assign agencies to specific auditing firms.
               </p>
               <Button size="sm" asChild>
-                <Link href="/super/audits">
+                <Link href="/super/auditing-firms/audits">
                   <LinkIcon className="mr-2 h-4 w-4" /> Go to Assignments
                 </Link>
               </Button>
@@ -109,7 +104,6 @@ export default async function Page() {
             </CardContent>
           </Card>
 
-          {/* --- NEW REPORT CARD --- */}
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Assignment Reports</CardTitle>
@@ -123,6 +117,25 @@ export default async function Page() {
               <Button size="sm" asChild>
                 <Link href="/super/reports">
                   <LinkIcon className="mr-2 h-4 w-4" /> View Reports
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* --- AUDITING FIRMS CARD --- */}
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Auditing Firms</CardTitle>
+              <Building className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">Manage Firms</div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Register and manage auditing firms.
+              </p>
+              <Button size="sm" asChild>
+                <Link href="/super/auditing-firms">
+                  <LinkIcon className="mr-2 h-4 w-4" /> Manage Firms
                 </Link>
               </Button>
             </CardContent>

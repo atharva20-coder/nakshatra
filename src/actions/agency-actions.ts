@@ -3,7 +3,6 @@
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { UserRole } from "@/generated/prisma";
 import { headers } from "next/headers";
 import { getErrorMessage } from "@/lib/utils";
 
