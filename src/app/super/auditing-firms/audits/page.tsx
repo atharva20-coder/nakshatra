@@ -77,7 +77,7 @@ export default async function AuditFirmsSummaryPage() {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                             <Button asChild variant="outline" size="sm">
-                                                <Link href={`/super/audits/assign/${firm.id}`}>
+                                                <Link href={`/super/auditing-firms/audits/${firm.id}`}>
                                                     Manage Assignments <ArrowRight className="ml-2 h-4 w-4" />
                                                 </Link>
                                             </Button>
