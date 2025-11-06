@@ -1,4 +1,4 @@
-// src/app/profile/page.tsx
+//src/app/profile/page.tsx
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { SignOutButton } from "@/components/sign-out-button";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import { BranchDetailsManager } from "@/components/branch-details-manager";
 import { NotificationBell } from "@/components/notification-bell";
 import { EnhancedActivityLogs } from "@/components/enhanced-activity-logs";
 import { LayoutDashboard, UserCog, UserCheck, Search } from "lucide-react"; // Added icons
+import { CollectionManagerProfileForm } from "@/components/cm-profile-form"; // --- 1. IMPORT NEW COMPONENT ---
 
 export default async function Page() {
   const headersList = await headers();
@@ -41,7 +42,7 @@ export default async function Page() {
   const isAdminUser = role === UserRole.ADMIN;
   const isSuperAdmin = role === UserRole.SUPER_ADMIN;
   const isAuditor = role === UserRole.AUDITOR;
-  const isCollectionManager = role === UserRole.COLLECTION_MANAGER; // Keep this specific check if needed elsewhere
+  const isCollectionManager = role === UserRole.COLLECTION_MANAGER; // Keep this specific check
 
   // Determine the correct dashboard link based on role
   let dashboardLink: string | null = null;
@@ -149,74 +150,75 @@ export default async function Page() {
             isAuditor ||
             isCollectionManager) && (
             <TabsContent value="admin" className="space-y-10">
-              {/* ... (Admin/Auditor/CM details card - content remains the same) ... */}
-              <section className="space-y-8">
-                <div className="pb-4 border-b dark:border-gray-700">
-                  <h2 className="text-3xl font-bold text-neutral-800 dark:text-neutral-100">
-                    {/* ... (Dynamic Title based on role) ... */}
-                      {isSuperAdmin
-                      ? "Super Admin Information"
-                      : isAuditor
-                      ? "Auditor Information"
-                      : isCollectionManager
-                      ? "Collection Manager Information"
-                      : "Admin Information"}
-                  </h2>
-                  <p className="text-muted-foreground text-sm mt-1 dark:text-gray-400">
-                    {/* ... (Dynamic Description based on role) ... */}
-                      {isSuperAdmin
-                      ? "Overview of your system-level credentials and privileges."
-                      : isAuditor
-                      ? "Overview of your audit credentials and assigned reports."
-                      : isCollectionManager
-                      ? "Overview of your assigned collections and reporting authority."
-                      : "Overview of your admin credentials and reporting structure."}
-                  </p>
-                </div>
-                <Card className="bg-white dark:bg-gray-800">
-                   <CardHeader>
-                    <CardTitle className="dark:text-gray-100">
+              
+              {/* --- 2. ADD CONDITIONAL LOGIC HERE --- */}
+              {isCollectionManager ? (
+                // For Collection Managers, show the new dynamic form
+                <CollectionManagerProfileForm />
+              ) : (
+                // For Admins, Super Admins, and Auditors, show the original static card
+                <section className="space-y-8">
+                  <div className="pb-4 border-b dark:border-gray-700">
+                    <h2 className="text-3xl font-bold text-neutral-800 dark:text-neutral-100">
                         {isSuperAdmin
-                        ? "Super Admin Details"
+                        ? "Super Admin Information"
                         : isAuditor
-                        ? "Auditor Details"
-                        : isCollectionManager
-                        ? "Collection Manager Details"
-                        : "Admin Employee Details"}
-                    </CardTitle>
-                  </CardHeader>
-                   <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="empId" className="dark:text-gray-300">Employee ID</Label>
-                        <Input id="empId" placeholder="N/A" readOnly className="dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"/>
+                        ? "Auditor Information"
+                        : "Admin Information"}
+                    </h2>
+                    <p className="text-muted-foreground text-sm mt-1 dark:text-gray-400">
+                        {isSuperAdmin
+                        ? "Overview of your system-level credentials and privileges."
+                        : isAuditor
+                        ? "Overview of your audit credentials and assigned reports."
+                        : "Overview of your admin credentials and reporting structure."}
+                    </p>
+                  </div>
+                  <Card className="bg-white dark:bg-gray-800">
+                    <CardHeader>
+                      <CardTitle className="dark:text-gray-100">
+                          {isSuperAdmin
+                          ? "Super Admin Details"
+                          : isAuditor
+                          ? "Auditor Details"
+                          : "Admin Employee Details"}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="empId" className="dark:text-gray-300">Employee ID</Label>
+                          <Input id="empId" placeholder="N/A" readOnly className="dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"/>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="name" className="dark:text-gray-300">Full Name</Label>
+                          <Input
+                            id="name"
+                            value={session.user.name ?? ""}
+                            readOnly
+                            className="dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="email" className="dark:text-gray-300">Official Email</Label>
+                          <Input
+                            id="email"
+                            value={session.user.email ?? ""}
+                            readOnly
+                            className="dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="role" className="dark:text-gray-300">Role</Label>
+                          <Input id="role" value={role} readOnly className="dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"/>
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="name" className="dark:text-gray-300">Full Name</Label>
-                        <Input
-                          id="name"
-                          value={session.user.name ?? ""}
-                          readOnly
-                          className="dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="email" className="dark:text-gray-300">Official Email</Label>
-                        <Input
-                          id="email"
-                          value={session.user.email ?? ""}
-                          readOnly
-                          className="dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="role" className="dark:text-gray-300">Role</Label>
-                        <Input id="role" value={role} readOnly className="dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"/>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </section>
+                    </CardContent>
+                  </Card>
+                </section>
+              )}
+              {/* --- END OF MODIFICATION --- */}
+
             </TabsContent>
           )}
 

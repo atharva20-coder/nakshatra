@@ -1,4 +1,4 @@
-// src/actions/collection-manager.action.ts
+//src/actions/collection-manager.action.ts
 "use server";
 
 import { auth } from "@/lib/auth";
@@ -24,7 +24,9 @@ import { getProactiveEscalationByIdForAdmin } from "@/actions/proactive-escalati
 import { getProductDeclarationByIdForAdmin } from "@/actions/product-declaration.action";
 import { getRepoKitTrackerByIdForAdmin } from "@/actions/repo-kit-tracker.action";
 import { getTelephoneDeclarationByIdForAdmin } from "@/actions/telephone-declaration.action";
+import { getErrorMessage } from "@/lib/utils"; // <-- FIX: IMPORT ADDED
 
+// Type-safe response types
 // Type-safe response types
 interface CMProfile {
   id: string;
@@ -32,10 +34,13 @@ interface CMProfile {
   email: string;
   employeeId: string;
   designation: string;
+  department: string | null; 
   productAssigned: string;
+  supervisorId: string | null; // <-- ADDED THIS
   supervisorName: string | null;
   supervisorEmail: string | null;
   supervisorEmployeeId: string | null;
+  supervisorDesignation: string | null;
   createdAt: Date;
 }
 
@@ -99,6 +104,9 @@ async function getOrCreateCMProfile(userId: string): Promise<CollectionManagerPr
 /**
  * Get Collection Manager Profile
  */
+/**
+ * Get Collection Manager Profile
+ */
 export async function getCMProfileAction() {
   const headersList = await headers();
   const session = await auth.api.getSession({ headers: headersList });
@@ -118,20 +126,44 @@ export async function getCMProfileAction() {
       });
     }
 
+    // --- NEW: Fetch all other CMs to be potential supervisors ---
+    const potentialSupervisors = await prisma.collectionManagerProfile.findMany({
+      where: {
+        userId: { not: session.user.id } // Can't be your own supervisor
+      },
+      select: {
+        id: true, // This is the CollectionManagerProfile ID
+        user: {
+          select: { name: true }
+        }
+      }
+    });
+
     const profile: CMProfile = {
       id: cmProfile.id,
       name: session.user.name,
       email: session.user.email,
       employeeId: cmProfile.employeeId,
       designation: cmProfile.designation,
+      department: cmProfile.department, 
       productAssigned: cmProfile.productsAssigned.join(", ") || "N/A",
+      supervisorId: cmProfile.supervisorId, // <-- ADDED THIS
       supervisorName: supervisorInfo?.user.name ?? null,
       supervisorEmail: supervisorInfo?.user.email ?? null,
       supervisorEmployeeId: supervisorInfo?.employeeId ?? null,
       createdAt: cmProfile.createdAt,
+      supervisorDesignation: cmProfile.supervisorDesignation,
     };
 
-    return { success: true, profile };
+    return { 
+      success: true, 
+      profile, 
+      // --- NEW: Return the list of supervisors ---
+      potentialSupervisors: potentialSupervisors.map(p => ({
+        id: p.id,
+        name: p.user.name
+      })) 
+    };
   } catch (error) {
     console.error("Error fetching CM profile:", error);
     return { error: "Failed to fetch profile" };
@@ -976,5 +1008,76 @@ export async function getCMAgencyFormDetailsAction(formId: string, formType: For
   } catch (error) {
     console.error("Error fetching form details:", error);
     return { error: "Failed to fetch form details." };
+  }
+}
+
+// ===================================================================
+// --- NEW ACTION TO UPDATE CM PROFILE ---
+// ===================================================================
+
+/**
+ * Update Collection Manager Profile
+ * This action is called from the profile page to update CM-specific details.
+ */
+export async function updateCMProfileAction(data: {
+  employeeId: string;
+  designation: string;
+  department?: string;
+  productsAssigned: string; // This will be a comma-separated string from the form
+}) {
+  const headersList = await headers();
+  const session = await auth.api.getSession({ headers: headersList });
+
+  if (!session || session.user.role !== UserRole.COLLECTION_MANAGER) {
+    return { error: "Unauthorized: Only Collection Managers can update their profile" };
+  }
+
+  try {
+    const cmProfile = await prisma.collectionManagerProfile.findUnique({
+      where: { userId: session.user.id },
+    });
+
+    if (!cmProfile) {
+      // This should ideally be created on first profile view by getCMProfileAction,
+      // but we handle it just in case.
+      return { error: "Profile not found. Please reload the page." };
+    }
+
+    // Validate employeeId uniqueness if it's being changed
+    if (data.employeeId && data.employeeId !== cmProfile.employeeId) {
+      const existing = await prisma.collectionManagerProfile.findUnique({
+        where: { employeeId: data.employeeId },
+      });
+      if (existing) {
+        return { error: "Employee ID already in use." };
+      }
+    }
+
+    // Convert comma-separated string to string array for Prisma
+    const productsArray = data.productsAssigned
+      .split(',')
+      .map(p => p.trim())
+      .filter(p => p.length > 0); // Remove empty strings
+
+    // FIX: Removed unused 'updatedProfile' variable
+    await prisma.collectionManagerProfile.update({
+      where: { id: cmProfile.id },
+      data: {
+        employeeId: data.employeeId,
+        designation: data.designation,
+        department: data.department || null,
+        productsAssigned: productsArray,
+      },
+    });
+
+    revalidatePath("/profile");
+    return { success: true, message: "Profile updated successfully!" };
+
+  } catch (error) {
+    console.error("Error updating CM profile:", error);
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+         return { error: "This Employee ID is already in use by another manager." };
+    }
+    return { error: getErrorMessage(error) }; // This now works
   }
 }

@@ -750,6 +750,7 @@ model CollectionManagerProfile {
   supervisorId          String?
   supervisor            CollectionManagerProfile? @relation("CMSupervisor", fields: [supervisorId], references: [id], onDelete: SetNull)
   subordinates          CollectionManagerProfile[] @relation("CMSupervisor")
+  supervisorDesignation String?
   
   agencyAssignments     CMAgencyAssignment[]
   approvalsGiven        CMApproval[]
