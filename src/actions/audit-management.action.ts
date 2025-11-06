@@ -8,6 +8,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createNotificationAction } from "@/actions/notification.action";
 import { logFormActivityAction } from "@/actions/activity-logging.action";
+import { getErrorMessage } from "@/lib/utils";
 
 /**
  * Super Admin: Get a summary of all auditing firms and their stats.
@@ -1057,3 +1058,115 @@ export async function getAuditDetailsAction(auditId: string) {
     }
 }
 
+/**
+ * Admin: Get Audit, Observations, and Scorecard for review/scoring
+ */
+export async function getAuditForAdminAction(auditId: string) {
+  const headersList = await headers();
+  const session = await auth.api.getSession({ headers: headersList });
+  if (!session || (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN")) {
+    return { error: "Forbidden" };
+  }
+
+  try {
+    const audit = await prisma.audit.findUnique({
+      where: { id: auditId },
+      include: {
+        agency: { select: { id: true, name: true, email: true } },
+        firm: { select: { name: true } },
+        observations: { orderBy: { createdAt: 'asc' } },
+        scorecard: true
+      }
+    });
+
+    if (!audit) {
+      return { error: "Audit not found" };
+    }
+    
+    return { success: true, audit };
+
+  } catch (error) {
+    return { error: getErrorMessage(error) };
+  }
+}
+
+/**
+ * Admin: Save/Publish an Audit Scorecard
+ */
+export async function saveAuditScorecardAction(data: {
+  auditId: string;
+  auditPeriod: string;
+  auditScore: number;
+  auditGrade: string;
+  auditCategory: string;
+  finalObservation: string;
+  justification: string;
+}) {
+  const headersList = await headers();
+  const session = await auth.api.getSession({ headers: headersList });
+  if (!session || (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN")) {
+    return { error: "Forbidden" };
+  }
+
+  try {
+    // 1. Find the Auditor Profile ID
+    const audit = await prisma.audit.findUnique({
+      where: { id: data.auditId },
+      select: { auditorId: true, agencyId: true, agency: { select: { name: true } } }
+    });
+    
+    if (!audit) {
+      return { error: "Audit not found" };
+    }
+
+    // 2. Upsert the Scorecard
+    const scorecard = await prisma.auditScorecard.upsert({
+      where: { auditId: data.auditId },
+      create: {
+        auditId: data.auditId,
+        auditorProfileId: audit.auditorId, // Link to the Auditor profile
+        auditPeriod: data.auditPeriod,
+        auditScore: data.auditScore,
+        auditGrade: data.auditGrade,
+        auditCategory: data.auditCategory,
+        finalObservation: data.finalObservation,
+        justification: data.justification,
+        signedAt: new Date(),
+      },
+      update: {
+        auditPeriod: data.auditPeriod,
+        auditScore: data.auditScore,
+        auditGrade: data.auditGrade,
+        auditCategory: data.auditCategory,
+        finalObservation: data.finalObservation,
+        justification: data.justification,
+      }
+    });
+
+    // 3. Log this action
+    await logFormActivityAction({
+      action: ActivityAction.PENALTY_SUBMITTED, // Using this as "Admin Review Complete"
+      entityType: 'AuditScorecard',
+      entityId: scorecard.id,
+      description: `Admin published scorecard for audit on ${audit.agency.name}`,
+      metadata: { ...data }
+    });
+
+    // 4. Notify the agency
+    await createNotificationAction(
+      audit.agencyId,
+      NotificationType.SYSTEM_ALERT,
+      "Audit Scorecard Published",
+      `Your audit scorecard for the period ${data.auditPeriod} has been published.`,
+      `/user/audits/${data.auditId}` // Link to the new agency view
+    );
+    
+    revalidatePath(`/admin/audits/${data.auditId}`);
+    revalidatePath(`/user/audits/${data.auditId}`);
+
+    return { success: true, scorecard };
+
+  } catch (error) {
+    return { error: getErrorMessage(error) };
+  }
+}

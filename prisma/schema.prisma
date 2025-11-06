@@ -844,6 +844,11 @@ model AuditingFirm {
   updatedAt DateTime @updatedAt
   name      String   @unique
 
+  address       String? @db.Text
+  contactPerson String?
+  contactEmail  String?
+  contactPhone  String?
+
   auditors          Auditor[]
   audits            Audit[]
   agencyAssignments AgencyAssignment[]
@@ -879,6 +884,7 @@ model AgencyAssignment {
   assignedBy  String
   assignedAt  DateTime     @default(now())
   isActive    Boolean      @default(true)
+  viewedByAt  DateTime?
 
   @@unique([agencyId, firmId])
   @@map("agency_assignments")

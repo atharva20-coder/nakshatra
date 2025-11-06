@@ -10,6 +10,8 @@ import { FORM_CONFIGS, FormType } from "@/types/forms";
 import { SubmissionStatus } from "@/generated/prisma";
 import Link from "next/link";
 import { ReturnButton } from "@/components/return-button";
+import { getCompletedAuditsForAgency } from "@/actions/agency-actions"; // Adjust path if needed
+import { Star } from "lucide-react";
 
 // Define form table mappings
 const FORM_TABLE_MAPPINGS = {
@@ -205,6 +207,8 @@ interface FormCardProps {
   formStatus: FormStatus;
 }
 
+
+
 function FormCard({ formStatus }: FormCardProps) {
   const config = FORM_CONFIGS[formStatus.formType];
   const hasExistingForm = formStatus.formId && (formStatus.status === 'DRAFT' || formStatus.status === 'SUBMITTED');
@@ -275,6 +279,8 @@ function FormCard({ formStatus }: FormCardProps) {
     </Card>
   );
 }
+
+
 
 export default async function Dashboard() {
   const headersList = await headers();
