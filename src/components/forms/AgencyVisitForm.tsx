@@ -6,27 +6,25 @@ import { useRouter } from "next/navigation";
 import { useTableRows } from "@/hooks/use-table-rows";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Trash2, Save, Send, Loader2, AlertCircle } from "lucide-react"; // Added AlertCircle
+import { Trash2, Save, Send, Loader2, CheckCircle } from "lucide-react";
 import { saveAgencyVisitAction, deleteAgencyVisitAction } from "@/actions/agency-visit.action";
 import { cn } from "@/lib/utils";
 import { AgencyTableRow, FORM_CONFIGS } from "@/types/forms";
 import { ApprovalButton } from "@/components/approval-button-with-session";
 import { CMSessionIndicator } from "@/components/cm-session-indicator";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // Import Card components
-import { Badge } from "@/components/ui/badge"; // Import Badge
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { ApprovalDetailsModal } from "@/components/approval-details-modal";
 
-// ** MODIFIED INTERFACE **
 interface AgencyVisitFormProps {
   initialData?: {
     id: string;
     status: string;
     details: AgencyTableRow[];
-    agencyInfo?: { userId: string; name: string; email: string }; // Added optional agency info
+    agencyInfo?: { userId: string; name: string; email: string };
   } | null;
-  isAdminView?: boolean;  // Added isAdminView prop
+  isAdminView?: boolean;
 }
-// ** END MODIFIED INTERFACE **
-
 
 const createNewRow = (id: number): AgencyTableRow => {
   const now = new Date();
@@ -47,17 +45,17 @@ const createNewRow = (id: number): AgencyTableRow => {
   };
 };
 
-// ** MODIFIED COMPONENT SIGNATURE **
-export const AgencyVisitForm = ({ initialData, isAdminView = false }: AgencyVisitFormProps) => { // Destructure isAdminView
-// ** END MODIFIED COMPONENT SIGNATURE **
-
+export const AgencyVisitForm = ({ initialData, isAdminView = false }: AgencyVisitFormProps) => {
   const router = useRouter();
   const [isPending, setIsPending] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(initialData?.status === 'SUBMITTED');
   const [cmSessionId, setCmSessionId] = useState<string | null>(null);
   const metadata = FORM_CONFIGS.agencyVisits;
 
-  // Determine actual editability
+  // Modal state for viewing approval details
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedApproval, setSelectedApproval] = useState<string | null>(null);
+
   const isFormEditable = !isAdminView && !isSubmitted;
 
   const { rows, addRow, removeRow, handleInputChange, updateRowValue } = useTableRows<AgencyTableRow>(
@@ -69,6 +67,17 @@ export const AgencyVisitForm = ({ initialData, isAdminView = false }: AgencyVisi
     setIsSubmitted(initialData?.status === 'SUBMITTED');
   }, [initialData]);
 
+  // Helper function to check if approval data is valid JSON with expected structure
+  const isValidApproval = (approvalData: string | null): boolean => {
+    if (!approvalData) return false;
+    try {
+      const parsed = JSON.parse(approvalData);
+      return !!(parsed && parsed.signature && parsed.collectionManager);
+    } catch {
+      return false;
+    }
+  };
+
   const handleApprove = (rowId: number | string, approvalData: {
     signature: string;
     timestamp: string;
@@ -78,22 +87,30 @@ export const AgencyVisitForm = ({ initialData, isAdminView = false }: AgencyVisi
       designation: string;
       productTag: string;
     };
+    remarks?: string;
   }) => {
-    // This logic should only run in user view
     if (isAdminView) return;
 
-    const now = new Date();
-    const signatureText = `${approvalData.collectionManager.name} (${approvalData.collectionManager.email})`;
-    updateRowValue(rowId, 'signature', signatureText);
+    // Store the full approval data as JSON string
+    const approvalJsonString = JSON.stringify(approvalData);
+    updateRowValue(rowId, 'signature', approvalJsonString);
 
+    // Auto-fill timeOut if empty
     const currentRow = rows.find(r => r.id === rowId);
     if (currentRow && !currentRow.timeOut) {
+      const now = new Date();
       updateRowValue(rowId, 'timeOut', now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }));
     }
+
+    toast.success(`Visit record approved by ${approvalData.collectionManager.name}.`);
+  };
+
+  const handleViewApproval = (approvalData: string) => {
+    setSelectedApproval(approvalData);
+    setIsModalOpen(true);
   };
 
   const handleSaveOrSubmit = async (status: "DRAFT" | "SUBMITTED") => {
-    // Prevent action in admin view
     if (isAdminView) return;
 
     if (rows.length === 0) {
@@ -111,7 +128,7 @@ export const AgencyVisitForm = ({ initialData, isAdminView = false }: AgencyVisi
     }
 
     if (status === "SUBMITTED") {
-      const unapprovedRows = rows.filter(row => !row.signature);
+      const unapprovedRows = rows.filter(row => !isValidApproval(row.signature));
       if (unapprovedRows.length > 0) {
         toast.error(`${unapprovedRows.length} visit(s) still need Collection Manager approval before submission.`);
         return;
@@ -133,18 +150,14 @@ export const AgencyVisitForm = ({ initialData, isAdminView = false }: AgencyVisi
       if (status === "SUBMITTED") {
         setIsSubmitted(true);
         router.push("/user/dashboard");
-      } else if (result.formId) {
-        // Only push if it's a new draft being saved
-        if (!initialData?.id) {
-            router.push(`/user/forms/agencyVisits/${result.formId}`);
-        }
+      } else if (result.formId && !initialData?.id) {
+        router.push(`/user/forms/agencyVisits/${result.formId}`);
       }
       router.refresh();
     }
   };
 
   const handleDelete = async () => {
-    // Prevent action in admin view or if submitted
     if (isAdminView || isSubmitted || !initialData?.id) return;
 
     if (!confirm("Are you sure you want to delete this draft? This action cannot be undone.")) {
@@ -164,8 +177,8 @@ export const AgencyVisitForm = ({ initialData, isAdminView = false }: AgencyVisi
 
   const getVisitStats = () => {
     const total = rows.length;
-    const approved = rows.filter(r => r.signature && r.signature !== '').length;
-    const pending = rows.filter(r => !r.signature || r.signature === '').length;
+    const approved = rows.filter(r => isValidApproval(r.signature)).length;
+    const pending = rows.filter(r => !isValidApproval(r.signature)).length;
     const completed = rows.filter(r => r.timeOut && r.timeOut !== '').length;
 
     return { total, approved, pending, completed };
@@ -174,12 +187,10 @@ export const AgencyVisitForm = ({ initialData, isAdminView = false }: AgencyVisi
 
   return (
     <div className="space-y-6">
-      {/* Conditionally render CM Session Indicator only if NOT admin view and form is editable */}
       {!isAdminView && isFormEditable && (
         <CMSessionIndicator onSessionChange={(sessionId) => setCmSessionId(sessionId)} />
       )}
 
-      {/* Show Agency Info if in Admin View */}
       {isAdminView && initialData?.agencyInfo && (
         <Card className="mb-4 bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700">
            <CardHeader>
@@ -193,20 +204,18 @@ export const AgencyVisitForm = ({ initialData, isAdminView = false }: AgencyVisi
         </Card>
       )}
 
-       {/* Status Banner (Only for User view when submitted) */}
        {!isAdminView && isSubmitted && (
          <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-4 text-center font-medium dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-200">
            <p>This form has been submitted and cannot be edited.</p>
          </div>
        )}
 
-      {/* Header - Conditionally show Delete button */}
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold">{metadata.title}</h2>
           <p className="text-muted-foreground">{metadata.description}</p>
         </div>
-        {isFormEditable && initialData?.id && ( // Only show delete for editable drafts
+        {isFormEditable && initialData?.id && (
           <Button variant="destructive" onClick={handleDelete} disabled={isPending}>
             <Trash2 className="h-4 w-4 mr-2" />
             Delete Draft
@@ -214,10 +223,8 @@ export const AgencyVisitForm = ({ initialData, isAdminView = false }: AgencyVisi
         )}
       </div>
 
-      {/* Visit Overview Stats */}
       {rows.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg border dark:bg-gray-800 dark:border-gray-700">
-          {/* Stats content remains the same */}
             <div className="text-center">
                 <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.total}</div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">Total Visits</div>
@@ -237,10 +244,8 @@ export const AgencyVisitForm = ({ initialData, isAdminView = false }: AgencyVisi
         </div>
       )}
 
-      {/* Important Note (Only for editable user view) */}
       {isFormEditable && !cmSessionId && stats.pending > 0 && (
          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 dark:bg-amber-900/30 dark:border-amber-700">
-            {/* Note content remains the same */}
              <div className="flex items-start gap-3">
                  <div className="text-amber-600 dark:text-amber-400 mt-0.5">⚠️</div>
                  <div>
@@ -254,10 +259,8 @@ export const AgencyVisitForm = ({ initialData, isAdminView = false }: AgencyVisi
          </div>
       )}
 
-      {/* CM Session Active Notice (Only for editable user view) */}
       {isFormEditable && cmSessionId && (
          <div className="bg-green-50 border border-green-200 rounded-lg p-4 dark:bg-green-900/30 dark:border-green-700">
-            {/* Notice content remains the same */}
               <div className="flex items-start gap-3">
                  <div className="text-green-600 dark:text-green-400 mt-0.5">✓</div>
                  <div>
@@ -270,11 +273,9 @@ export const AgencyVisitForm = ({ initialData, isAdminView = false }: AgencyVisi
          </div>
       )}
 
-      {/* Agency Visits Table */}
       <div className="space-y-4">
         <div className="flex justify-between items-center">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Visit Records</h3>
-          {/* Add Visit button only if editable */}
           {isFormEditable && (
             <Button onClick={addRow} disabled={isPending} variant="outline">
               Add Visit
@@ -286,7 +287,6 @@ export const AgencyVisitForm = ({ initialData, isAdminView = false }: AgencyVisi
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-800">
-                 {/* Table headers remain the same, conditionally hide Actions header */}
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Sr. No</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Date</th>
@@ -298,163 +298,166 @@ export const AgencyVisitForm = ({ initialData, isAdminView = false }: AgencyVisi
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Bucket/DPD</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Time In</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Time Out</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-gray-400">CM Approval</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-gray-400">CM Approval*</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Purpose</th>
-                  {isFormEditable && ( // Only show Actions header if editable
+                  {isFormEditable && (
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-gray-400">Actions</th>
                   )}
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-900 dark:divide-gray-700">
-                {rows.map((row, index) => (
-                  <tr key={row.id} className={cn("hover:bg-gray-50 dark:hover:bg-gray-800/50", index % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800/50")}>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{row.srNo}</td>
-                    {/* Disable all inputs based on isFormEditable */}
-                    <td className="px-4 py-3">
-                      <Input
-                        type="date"
-                        value={row.dateOfVisit}
-                        onChange={(e) => handleInputChange(row.id, 'dateOfVisit', e.target.value)}
-                        className="w-full min-w-[140px]"
-                        disabled={!isFormEditable || isPending}
-                      />
-                    </td>
-                     <td className="px-4 py-3">
-                      <Input
-                        type="text"
-                        value={row.employeeId}
-                        onChange={(e) => handleInputChange(row.id, 'employeeId', e.target.value)}
-                        className="w-full min-w-[120px]"
-                        disabled={!isFormEditable || isPending}
-                        placeholder="Employee ID"
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <Input
-                        type="text"
-                        value={row.employeeName}
-                        onChange={(e) => handleInputChange(row.id, 'employeeName', e.target.value)}
-                        className="w-full min-w-[150px]"
-                        disabled={!isFormEditable || isPending}
-                        placeholder="Name"
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <Input
-                        type="text"
-                        value={row.mobileNo}
-                        onChange={(e) => handleInputChange(row.id, 'mobileNo', e.target.value)}
-                        className="w-full min-w-[120px]"
-                        disabled={!isFormEditable || isPending}
-                        placeholder="Mobile"
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <Input
-                        type="text"
-                        value={row.branchLocation}
-                        onChange={(e) => handleInputChange(row.id, 'branchLocation', e.target.value)}
-                        className="w-full min-w-[150px]"
-                        disabled={!isFormEditable || isPending}
-                        placeholder="Branch"
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <Input
-                        type="text"
-                        value={row.product}
-                        onChange={(e) => handleInputChange(row.id, 'product', e.target.value)}
-                        className="w-full min-w-[120px]"
-                        disabled={!isFormEditable || isPending}
-                        placeholder="Product"
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <Input
-                        type="text"
-                        value={row.bucketDpd}
-                        onChange={(e) => handleInputChange(row.id, 'bucketDpd', e.target.value)}
-                        className="w-full min-w-[120px]"
-                        disabled={!isFormEditable || isPending}
-                        placeholder="Bucket"
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <Input
-                        type="time"
-                        value={row.timeIn}
-                        onChange={(e) => handleInputChange(row.id, 'timeIn', e.target.value)}
-                        className="w-full min-w-[120px]"
-                        disabled={!isFormEditable || isPending}
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <Input
-                        type="time"
-                        value={row.timeOut}
-                        onChange={(e) => handleInputChange(row.id, 'timeOut', e.target.value)}
-                        className="w-full min-w-[120px]"
-                        disabled={!isFormEditable || isPending}
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                       {/* Conditionally render Approval Button or Signature Text */}
-                       {!isAdminView ? (
-                         <ApprovalButton
-                           rowId={row.id}
-                           formType="agencyVisits"
-                           formId={initialData?.id || 'draft'}
-                           fieldToUpdate="signature"
-                           cmSessionId={cmSessionId}
-                           onApprovalSuccess={handleApprove}
-                           disabled={!isFormEditable || isPending} // Disable if form not editable
-                           isApproved={!!row.signature}
-                           approvalSignature={row.signature}
-                         />
-                       ) : (
-                         row.signature ? (
-                           <span className="text-xs text-gray-600 dark:text-gray-400 break-words max-w-[200px] block">
-                             {row.signature}
-                           </span>
-                         ) : (
-                            <span className="text-xs text-gray-400 italic">Not Approved</span>
-                         )
-                       )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Input
-                        type="text"
-                        value={row.purposeOfVisit}
-                        onChange={(e) => handleInputChange(row.id, 'purposeOfVisit', e.target.value)}
-                        className="w-full min-w-[150px]"
-                        disabled={!isFormEditable || isPending}
-                        placeholder="Purpose"
-                      />
-                    </td>
-                    {/* Actions column only if editable */}
-                    {isFormEditable && (
+                {rows.map((row, index) => {
+                  const hasValidApproval = isValidApproval(row.signature);
+                  
+                  return (
+                    <tr key={row.id} className={cn("hover:bg-gray-50 dark:hover:bg-gray-800/50", index % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800/50")}>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{row.srNo}</td>
                       <td className="px-4 py-3">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeRow(row.id)}
-                          disabled={!isFormEditable || isPending || rows.length <= 1} // Also check isFormEditable
-                          className="hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-                          title={rows.length <= 1 ? "At least one visit is required" : "Remove visit"}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <Input
+                          type="date"
+                          value={row.dateOfVisit}
+                          onChange={(e) => handleInputChange(row.id, 'dateOfVisit', e.target.value)}
+                          className="w-full min-w-[140px]"
+                          disabled={!isFormEditable || isPending}
+                        />
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      <td className="px-4 py-3">
+                        <Input
+                          type="text"
+                          value={row.employeeId}
+                          onChange={(e) => handleInputChange(row.id, 'employeeId', e.target.value)}
+                          className="w-full min-w-[120px]"
+                          disabled={!isFormEditable || isPending}
+                          placeholder="Employee ID"
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Input
+                          type="text"
+                          value={row.employeeName}
+                          onChange={(e) => handleInputChange(row.id, 'employeeName', e.target.value)}
+                          className="w-full min-w-[150px]"
+                          disabled={!isFormEditable || isPending}
+                          placeholder="Name"
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Input
+                          type="text"
+                          value={row.mobileNo}
+                          onChange={(e) => handleInputChange(row.id, 'mobileNo', e.target.value)}
+                          className="w-full min-w-[120px]"
+                          disabled={!isFormEditable || isPending}
+                          placeholder="Mobile"
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Input
+                          type="text"
+                          value={row.branchLocation}
+                          onChange={(e) => handleInputChange(row.id, 'branchLocation', e.target.value)}
+                          className="w-full min-w-[150px]"
+                          disabled={!isFormEditable || isPending}
+                          placeholder="Branch"
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Input
+                          type="text"
+                          value={row.product}
+                          onChange={(e) => handleInputChange(row.id, 'product', e.target.value)}
+                          className="w-full min-w-[120px]"
+                          disabled={!isFormEditable || isPending}
+                          placeholder="Product"
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Input
+                          type="text"
+                          value={row.bucketDpd}
+                          onChange={(e) => handleInputChange(row.id, 'bucketDpd', e.target.value)}
+                          className="w-full min-w-[120px]"
+                          disabled={!isFormEditable || isPending}
+                          placeholder="Bucket"
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Input
+                          type="time"
+                          value={row.timeIn}
+                          onChange={(e) => handleInputChange(row.id, 'timeIn', e.target.value)}
+                          className="w-full min-w-[120px]"
+                          disabled={!isFormEditable || isPending}
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Input
+                          type="time"
+                          value={row.timeOut}
+                          onChange={(e) => handleInputChange(row.id, 'timeOut', e.target.value)}
+                          className="w-full min-w-[120px]"
+                          disabled={!isFormEditable || isPending}
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        {hasValidApproval ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full h-8 text-xs font-medium text-green-700 border-green-300 bg-green-50 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700 dark:hover:bg-green-800/30"
+                            onClick={() => handleViewApproval(row.signature!)}
+                          >
+                            <CheckCircle className="h-3 w-3 mr-1.5" />
+                            View Approval
+                          </Button>
+                        ) : !isAdminView ? (
+                          <ApprovalButton
+                            rowId={row.id}
+                            formType="agencyVisits"
+                            formId={initialData?.id || 'draft'}
+                            fieldToUpdate="signature"
+                            cmSessionId={cmSessionId}
+                            onApprovalSuccess={handleApprove}
+                            disabled={!isFormEditable || isPending}
+                            isApproved={false}
+                          />
+                        ) : (
+                          <span className="text-xs text-gray-400 italic">Not Approved</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Input
+                          type="text"
+                          value={row.purposeOfVisit}
+                          onChange={(e) => handleInputChange(row.id, 'purposeOfVisit', e.target.value)}
+                          className="w-full min-w-[150px]"
+                          disabled={!isFormEditable || isPending}
+                          placeholder="Purpose"
+                        />
+                      </td>
+                      {isFormEditable && (
+                        <td className="px-4 py-3">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeRow(row.id)}
+                            disabled={!isFormEditable || isPending || rows.length <= 1}
+                            className="hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                            title={rows.length <= 1 ? "At least one visit is required" : "Remove visit"}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
       </div>
 
-      {/* Action Buttons (Save/Submit) - Only show if editable */}
       {isFormEditable && (
         <div className="flex gap-4 justify-end mt-6 pt-4 border-t dark:border-gray-700">
           <Button
@@ -495,7 +498,6 @@ export const AgencyVisitForm = ({ initialData, isAdminView = false }: AgencyVisi
         </div>
       )}
 
-      {/* Read-only message */}
       {(isAdminView || isSubmitted) && (
         <div className="text-center py-4 text-muted-foreground mt-6 border-t dark:border-gray-700">
           <p className="text-sm">
@@ -503,6 +505,13 @@ export const AgencyVisitForm = ({ initialData, isAdminView = false }: AgencyVisi
           </p>
         </div>
       )}
+
+      {/* Approval Details Modal */}
+      <ApprovalDetailsModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        approvalData={selectedApproval}
+      />
     </div>
   );
-}
+};

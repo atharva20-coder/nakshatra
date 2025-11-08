@@ -79,6 +79,15 @@ const options = {
   // --- Global Middleware Hooks ---
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
+       if (ctx.path === "/sign-in/email") {
+      const email = String(ctx.body.email);
+      const user = await prisma.user.findUnique({ where: { email } });
+      if (user?.banned) {
+        throw new APIError("FORBIDDEN", {
+          message: "Your account has been deactivated. Please contact support.",
+        });
+      }
+    }
       // Restrict email domains during sign-up
       if (ctx.path === "/sign-up/email") {
         const email = String(ctx.body.email);
@@ -171,6 +180,10 @@ const options = {
         ] as Array<UserRole>,
         input: false,
       },
+      banned: { // <-- ADD THIS
+      type: "boolean",
+      input: false,
+      },
     },
   },
 
@@ -252,6 +265,7 @@ export const auth = betterAuth({
           image: user.image,
           createdAt: user.createdAt,
           role: user.role,
+          banned: user.banned ?? false,
         },
       };
     }, options),

@@ -5,13 +5,14 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, Clock, FileText, AlertCircle, Plus, Edit } from "lucide-react";
+import { CheckCircle, Clock, FileText, AlertCircle, Plus, Edit, ArrowRight } from "lucide-react"; // Import ArrowRight
 import { FORM_CONFIGS, FormType } from "@/types/forms";
 import { SubmissionStatus } from "@/generated/prisma";
 import Link from "next/link";
 import { ReturnButton } from "@/components/return-button";
-import { getCompletedAuditsForAgency } from "@/actions/agency-actions"; // Adjust path if needed
+import { getCompletedAuditsForAgency } from "@/actions/agency-actions"; // <-- IMPORT AUDIT ACTION
 import { Star } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"; // <-- IMPORT TABLE COMPONENTS
 
 // Define form table mappings
 const FORM_TABLE_MAPPINGS = {
@@ -303,6 +304,11 @@ export default async function Dashboard() {
 
   const formStatuses = await getUserFormStatuses(session.user.id);
   
+  // --- START: MODIFICATION ---
+  const auditResult = await getCompletedAuditsForAgency();
+  const completedAudits = auditResult.success ? auditResult.audits : [];
+  // --- END: MODIFICATION ---
+  
   // Categorize forms
   const requiredForms = formStatuses.filter(f => FORM_CONFIGS[f.formType].isRequired);
   const optionalForms = formStatuses.filter(f => !FORM_CONFIGS[f.formType].isRequired);
@@ -326,7 +332,7 @@ export default async function Dashboard() {
           </p>
         </div><div className="space-y-8">
           <ReturnButton href="/profile" label="Profile" />
-          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+          {/* Removed Admin Dashboard title */}
         </div>
 
         {/* Statistics Cards */}
@@ -414,6 +420,60 @@ export default async function Dashboard() {
             </CardContent>
           </Card>
         )}
+        
+        {/* --- START: NEW COMPLETED AUDITS SECTION --- */}
+        {completedAudits && completedAudits.length > 0 && (
+          <div className="mb-12">
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-6">
+              Published Audit Reports
+            </h2>
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Audit Date</TableHead>
+                      <TableHead>Auditing Firm</TableHead>
+                      <TableHead>Score</TableHead>
+                      <TableHead>Grade</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {completedAudits.map((audit) => (
+                      <TableRow key={audit.id}>
+                        <TableCell>
+                          {new Date(audit.auditDate).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {audit.firm.name}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="font-semibold">
+                            {audit.scorecard?.auditScore}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className="bg-rose-100 text-rose-800 font-bold">
+                            {audit.scorecard?.auditGrade}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button asChild size="sm" variant="ghost">
+                            <Link href={`/user/audits/${audit.id}`}>
+                              View Report <ArrowRight className="h-4 w-4 ml-2" />
+                            </Link>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+        {/* --- END: NEW COMPLETED AUDITS SECTION --- */}
 
         {/* Required Forms Section */}
         <div className="mb-8">

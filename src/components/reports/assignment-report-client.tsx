@@ -14,11 +14,18 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import type { AuditAssignmentReportItem, CmAssignmentReportItem } from '@/actions/reports.action';
+// Import the new tab component
+import { AuditReportTab } from './audit-report-tab'; 
+import type { 
+  AuditAssignmentReportItem, 
+  CmAssignmentReportItem,
+  AuditReportItem // Import the new type
+} from '@/actions/reports.action';
 
 interface ReportClientProps {
   initialAuditAssignments: AuditAssignmentReportItem[];
   initialCmAssignments: CmAssignmentReportItem[];
+  initialAuditReport: AuditReportItem[]; // Add new prop
   initialMonth: number;
   initialYear: number;
 }
@@ -36,6 +43,7 @@ const yearOptions = Array.from({ length: 5 }, (_, i) => {
 export function AssignmentReportClient({
   initialAuditAssignments,
   initialCmAssignments,
+  initialAuditReport, // Destructure new prop
   initialMonth,
   initialYear
 }: ReportClientProps) {
@@ -74,8 +82,6 @@ export function AssignmentReportClient({
       return <Badge variant="destructive">Deactivated</Badge>;
     }
     
-    // If it was deactivated *before* this period, it shouldn't show up,
-    // but as a fallback, we'll label it.
     return <Badge variant="destructive">Inactive</Badge>;
   };
 
@@ -113,14 +119,17 @@ export function AssignmentReportClient({
       </div>
 
       {/* 2. Tabs and Tables */}
-      <Tabs defaultValue="audit">
-        <TabsList className="grid w-full grid-cols-2 max-w-md">
-          <TabsTrigger value="audit">Audit Firm Assignments ({initialAuditAssignments.length})</TabsTrigger>
+      <Tabs defaultValue="audit-firm">
+        {/* --- MODIFICATION: Added new tab --- */}
+        <TabsList className="grid w-full grid-cols-3 max-w-lg">
+          <TabsTrigger value="audit-firm">Audit Firm Assignments ({initialAuditAssignments.length})</TabsTrigger>
           <TabsTrigger value="cm">CM Assignments ({initialCmAssignments.length})</TabsTrigger>
+          <TabsTrigger value="audits">Audits & Scorecards ({initialAuditReport.length})</TabsTrigger>
         </TabsList>
+        {/* --- END MODIFICATION --- */}
         
         {/* Audit Firm Assignments Tab */}
-        <TabsContent value="audit">
+        <TabsContent value="audit-firm">
           <div className="overflow-x-auto border rounded-lg">
             <Table>
               <TableHeader>
@@ -202,6 +211,12 @@ export function AssignmentReportClient({
             </Table>
           </div>
         </TabsContent>
+        
+        {/* --- NEW TAB CONTENT --- */}
+        <TabsContent value="audits">
+          <AuditReportTab audits={initialAuditReport} />
+        </TabsContent>
+        {/* --- END NEW TAB CONTENT --- */}
       </Tabs>
     </div>
   );

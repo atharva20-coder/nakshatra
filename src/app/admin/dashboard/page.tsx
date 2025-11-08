@@ -7,7 +7,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, FileText } from "lucide-react";
+import { Users, FileText, FileCheck2, BarChart2 } from "lucide-react"; // Import BarChart2
 
 export default async function Page() {
   const headersList = await headers();
@@ -57,19 +57,49 @@ export default async function Page() {
           <ReturnButton href="/profile" label="Back to Profile" />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+        {/* --- MODIFIED GRID: Now 4 columns --- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Request/Approval Management</CardTitle>
               <FileText className="h-6 w-6 text-gray-400" />
             </CardHeader>
             <CardContent>
-              <p className="text-gray-600 mb-4">View and manage all approvals</p>
+              <p className="text-gray-600 mb-4">View and manage form edit approvals</p>
               <Link href="/admin/approvals" className="text-rose-600 font-semibold hover:underline">
                 Go to requests page
               </Link>
             </CardContent>
           </Card>
+          
+          <Card className="hover:shadow-lg transition-shadow border-2 border-transparent hover:border-blue-500">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Audit Review Queue</CardTitle>
+              <FileCheck2 className="h-6 w-6 text-blue-500" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 mb-4">Review completed audits and publish scorecards.</p>
+              <Link href="/admin/audits" className="text-blue-600 font-semibold hover:underline">
+                Go to review queue
+              </Link>
+            </CardContent>
+          </Card>
+
+          {/* --- NEW CARD --- */}
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Reports</CardTitle>
+              <BarChart2 className="h-6 w-6 text-gray-400" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 mb-4">View monthly assignment and audit reports.</p>
+              <Link href="/admin/reports" className="text-rose-600 font-semibold hover:underline">
+                Go to reports
+              </Link>
+            </CardContent>
+          </Card>
+          {/* --- END NEW CARD --- */}
+
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Agency Activities</CardTitle>
@@ -83,6 +113,7 @@ export default async function Page() {
             </CardContent>
           </Card>
         </div>
+        {/* --- END MODIFIED GRID --- */}
 
         <div id="user-table">
           <Card>

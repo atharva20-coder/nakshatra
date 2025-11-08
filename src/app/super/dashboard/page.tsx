@@ -9,7 +9,8 @@ import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { UserCheck, Settings, LinkIcon, FileText, Building } from "lucide-react"; // Added Building
+import { DeactivateUserToggle } from "@/components/deactivate-user-toggle";
+import { UserCheck, Settings, LinkIcon, FileText, Building, FileCheck2, ListChecks } from "lucide-react"; // Added ListChecks
 
 export default async function Page() {
   const headersList = await headers();
@@ -67,7 +68,26 @@ export default async function Page() {
         </div>
 
         {/* --- MANAGEMENT CARDS --- */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Auditing Firms</CardTitle>
+              <Building className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">Manage Firms</div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Register and manage auditing firms.
+              </p>
+              <Button size="sm" asChild>
+                <Link href="/super/auditing-firms">
+                  <LinkIcon className="mr-2 h-4 w-4" /> Manage Firms
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Audit Management</CardTitle>
@@ -103,6 +123,24 @@ export default async function Page() {
               </Button>
             </CardContent>
           </Card>
+          
+          <Card className="hover:shadow-lg transition-shadow border-2 border-transparent hover:border-blue-500">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Audit Review Queue</CardTitle>
+              <FileCheck2 className="h-4 w-4 text-blue-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">Review Audits</div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Review completed audits and publish scorecards.
+              </p>
+              <Button size="sm" asChild variant="outline" className="text-blue-600 border-blue-300 hover:bg-blue-50 hover:text-blue-700">
+                <Link href="/admin/audits">
+                  <LinkIcon className="mr-2 h-4 w-4" /> Go to Review Queue
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
 
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -121,25 +159,26 @@ export default async function Page() {
               </Button>
             </CardContent>
           </Card>
-
-          {/* --- AUDITING FIRMS CARD --- */}
+          
+          {/* --- NEW CARD --- */}
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Auditing Firms</CardTitle>
-              <Building className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Compliance Parameters</CardTitle>
+              <ListChecks className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">Manage Firms</div>
+              <div className="text-2xl font-bold">Manage Form</div>
               <p className="text-xs text-muted-foreground mb-4">
-                Register and manage auditing firms.
+                Edit the &quot;Monthly Compliance&quot; form parameters.
               </p>
               <Button size="sm" asChild>
-                <Link href="/super/auditing-firms">
-                  <LinkIcon className="mr-2 h-4 w-4" /> Manage Firms
+                <Link href="/super/compliance-parameters">
+                  <LinkIcon className="mr-2 h-4 w-4" /> Manage Parameters
                 </Link>
               </Button>
             </CardContent>
           </Card>
+          {/* --- END NEW CARD --- */}
         </div>
         {/* --- END MANAGEMENT CARDS --- */}
 
@@ -178,10 +217,13 @@ export default async function Page() {
                           <UserRoleSelect userId={user.id} role={user.role as UserRole} />
                         </td>
                         <td className="px-4 py-3 text-center">
-                          {user.role === "USER" ? (
-                            <DeleteUserButton userId={user.id} />
+                          {user.role !== "SUPER_ADMIN" ? (
+                            <DeactivateUserToggle 
+                              userId={user.id} 
+                              isBanned={user.banned ?? false} 
+                            />
                           ) : (
-                            <PlaceholderDeleteUserButton />
+                            <span className="text-xs text-gray-500">N/A</span>
                           )}
                         </td>
                       </tr>

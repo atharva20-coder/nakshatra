@@ -101,7 +101,7 @@ export const AgencyAuditClient = ({ agency, audits }: AgencyAuditClientProps) =>
                 {audits.map(audit => (
                   <Link
                     key={audit.id}
-                    href={`/auditor/agencies/${agency.id}/audit/${audit.id}`}
+                    href={`/auditor/audit/${audit.id}`}
                     className="block p-4 border rounded-lg hover:bg-muted transition-colors"
                   >
                     <div className="flex justify-between items-center">

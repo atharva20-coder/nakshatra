@@ -33,6 +33,10 @@ export default async function Page() {
 
   if (!session) redirect("/auth/login");
 
+  if (session.user.banned) {
+    redirect("/auth/deactivated"); 
+  }
+
   const role = session.user.role;
 
   // Check if the user is an agency user (USER or COLLECTION_MANAGER)

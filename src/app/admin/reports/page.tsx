@@ -1,10 +1,10 @@
-// src/app/super/reports/page.tsx
+// src/app/admin/reports/page.tsx
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { UserRole } from "@/generated/prisma";
 import { ReturnButton } from "@/components/return-button";
-import { getAssignmentReportAction, getAuditReportAction } from "@/actions/reports.action"; // Import new action
+import { getAssignmentReportAction, getAuditReportAction } from "@/actions/reports.action";
 import { AssignmentReportClient } from "@/components/reports/assignment-report-client";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -12,11 +12,12 @@ interface PageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-export default async function AssignmentReportsPage({ searchParams }: PageProps) {
+export default async function AdminAssignmentReportsPage({ searchParams }: PageProps) {
   const headersList = await headers();
   const session = await auth.api.getSession({ headers: headersList });
 
-  if (!session || session.user.role !== UserRole.SUPER_ADMIN) {
+  // Allow ADMIN or SUPER_ADMIN
+  if (!session || (session.user.role !== UserRole.ADMIN && session.user.role !== UserRole.SUPER_ADMIN)) {
     redirect("/auth/login");
   }
 
@@ -32,14 +33,13 @@ export default async function AssignmentReportsPage({ searchParams }: PageProps)
   // 1. Fetch assignment data
   const { auditAssignments, cmAssignments, error: assignmentError } = await getAssignmentReportAction({ month, year });
 
-  // 2. --- NEW: Fetch audit report data ---
+  // 2. Fetch audit report data
   const { audits, error: auditError } = await getAuditReportAction({ month, year });
-  // --- END NEW ---
 
   if (assignmentError || auditError) {
     return (
       <div className="container mx-auto p-8">
-        <ReturnButton href="/super/dashboard" label="Back to Dashboard" />
+        <ReturnButton href="/admin/dashboard" label="Back to Dashboard" />
         <h1 className="text-2xl font-bold my-4">Error</h1>
         <p className="text-red-600">{assignmentError || auditError}</p>
       </div>
@@ -52,13 +52,13 @@ export default async function AssignmentReportsPage({ searchParams }: PageProps)
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100">
-              Assignment Reports
+              Admin Reports
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mt-1">
               View all agency assignments, audits, and scorecards for a specific month.
             </p>
           </div>
-          <ReturnButton href="/super/dashboard" label="Back to Dashboard" />
+          <ReturnButton href="/admin/dashboard" label="Back to Dashboard" />
         </div>
 
         <Card>
@@ -66,7 +66,7 @@ export default async function AssignmentReportsPage({ searchParams }: PageProps)
             <AssignmentReportClient 
               initialAuditAssignments={auditAssignments || []}
               initialCmAssignments={cmAssignments || []}
-              initialAuditReport={audits || []} // --- NEW PROP ---
+              initialAuditReport={audits || []}
               initialMonth={month}
               initialYear={year}
             />
