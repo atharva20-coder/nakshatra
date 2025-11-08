@@ -73,6 +73,11 @@ model User {
   cmAssignedAgencies          CMAgencyAssignment[] @relation("CMAssignedAgencies")
   cmApprovalsReceived         CMApproval[] @relation("CMApprovals")
 
+  //SCN
+  issuedShowCauseNotices      ShowCauseNotice[]   @relation("IssuedByAdmin")
+  receivedShowCauseNotices    ShowCauseNotice[]   @relation("ReceivedByAgency")
+  showCauseResponses          ShowCauseResponse[]
+
   @@map("users")
 }
 
@@ -912,6 +917,51 @@ model Audit {
   scorecard         AuditScorecard?
 
   @@map("audits")
+}
+
+// --- 2. ADD ShowCauseNotice and ShowCauseResponse MODELS ---
+model ShowCauseNotice {
+  id              String   @id @default(uuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  issuedByAdminId String
+  issuedByAdmin   User     @relation("IssuedByAdmin", fields: [issuedByAdminId], references: [id], onDelete: Restrict)
+
+  receivedByAgencyId String
+  receivedByAgency   User     @relation("ReceivedByAgency", fields: [receivedByAgencyId], references: [id], onDelete: Cascade)
+
+  subject         String   @db.Text
+  details         String   @db.Text
+  responseDueDate DateTime
+  
+  status          ShowCauseStatus @default(ISSUED)
+  adminRemarks    String?         @db.Text // Final closing remarks from admin
+
+  observations    Observation[] // <-- Relation to the observations
+  responses       ShowCauseResponse[]
+  
+  @@map("show_cause_notices")
+  @@index([issuedByAdminId])
+  @@index([receivedByAgencyId])
+}
+
+//Show cause notice
+model ShowCauseResponse {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  
+  noticeId  String
+  notice    ShowCauseNotice @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade) // Agency user who responded
+  
+  response  String   @db.Text // This is a general response to the SCN, not the observation
+  
+  @@map("show_cause_responses")
+  @@index([noticeId])
+  @@index([authorId])
 }
 
 // Observation model
