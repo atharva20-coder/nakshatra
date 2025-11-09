@@ -3,7 +3,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
-import { UserRole, AuditStatus, ObservationStatus, ObservationSeverity, PenaltyStatus, ActivityAction, NotificationType } from "@/generated/prisma";
+import { UserRole, AuditStatus, ObservationStatus, ObservationSeverity, PenaltyStatus, ActivityAction, NotificationType, ShowCauseStatus } from "@/generated/prisma";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createNotificationAction } from "@/actions/notification.action";
@@ -459,73 +459,63 @@ export async function addObservationAction(data: {
 }
 
 
+
 /**
  * Admin/Super Admin: Send observation to agency and set deadline
  */
 export async function sendObservationToAgencyAction(
   observationId: string,
-  responseDeadlineDays: number
+  deadline: Date
 ) {
+  console.warn("DEPRECATED: sendObservationToAgencyAction was called. Use issueShowCauseNoticeAction instead.");
   const headersList = await headers();
   const session = await auth.api.getSession({ headers: headersList });
 
-  // Explicit check for ADMIN or SUPER_ADMIN roles
   if (!session || (session.user.role !== UserRole.ADMIN && session.user.role !== UserRole.SUPER_ADMIN)) {
-    return { error: "Forbidden: Only admins or super admins can send observations" };
+    return { error: "Unauthorized" };
   }
 
   try {
-    const deadline = new Date();
-    deadline.setDate(deadline.getDate() + responseDeadlineDays);
-    deadline.setHours(23, 59, 59, 999);
-
     const observation = await prisma.observation.update({
       where: { id: observationId },
       data: {
         visibleToAgency: true,
         sentToAgencyAt: new Date(),
         sentBy: session.user.id,
-        status: ObservationStatus.SENT_TO_AGENCY,
+        status: ObservationStatus.AWAITING_AGENCY_RESPONSE,
         responseDeadline: deadline,
       },
       include: {
-        audit: {
-          include: {
-            agency: { select: { id: true, name: true } },
-          },
-        },
+        audit: true,
       },
     });
 
-     await logFormActivityAction({
-        action: ActivityAction.OBSERVATION_SENT_TO_AGENCY,
-        entityType: 'observation',
-        description: `Sent observation ${observation.observationNumber} to agency ${observation.audit.agency.name}`,
-        entityId: observation.id,
-        metadata: { auditId: observation.auditId, responseDeadline: deadline.toISOString() }
+    await logFormActivityAction({
+      action: ActivityAction.OBSERVATION_SENT_TO_AGENCY,
+      entityType: 'observation',
+      description: `Observation ${observation.observationNumber} sent to agency`,
+      entityId: observation.id,
+      metadata: { auditId: observation.auditId, deadline },
     });
 
     await createNotificationAction(
       observation.audit.agencyId,
       NotificationType.SYSTEM_ALERT,
-      "New Audit Observation Received",
-      `Please review observation ${observation.observationNumber}. Respond by ${deadline.toLocaleDateString()}.`,
-      `/user/observations/${observationId}`
+      "New Observation Received",
+      `You have received a new observation (${observation.observationNumber}). Please respond by ${deadline.toLocaleDateString()}.`,
+      `/user/observations/${observation.id}`
     );
 
     revalidatePath("/admin/observations");
     revalidatePath(`/admin/observations/${observationId}`);
-    revalidatePath(`/user/observations`);
+    revalidatePath("/user/observations");
 
     return { success: true, observation };
-  } catch (error: unknown) { // Use unknown
-    console.error("Error sending observation to agency:", error);
-     if (error instanceof Error) {
-        return { error: `Failed to send observation: ${error.message}` };
-    }
-    return { error: "Failed to send observation to agency due to an unknown error." };
+  } catch {
+    return { error: "Failed to send observation" };
   }
 }
+
 
 /**
  * Agency: Respond to an observation
@@ -534,7 +524,7 @@ export async function respondToObservationAction(
   observationId: string,
   accepted: boolean,
   response?: string,
-  evidencePath?: string
+  evidencePath?: string // <-- 1. ADD THIS NEW ARGUMENT
 ) {
   const headersList = await headers();
   const session = await auth.api.getSession({ headers: headersList });
@@ -552,16 +542,21 @@ export async function respondToObservationAction(
     if (!observation || observation.audit.agencyId !== session.user.id) {
       return { error: "Observation not found or access denied" };
     }
+    
+    // --- 2. MODIFY THIS CHECK: Allow response only if SENT_TO_AGENCY ---
     if (observation.status !== ObservationStatus.SENT_TO_AGENCY) {
+      if (observation.status === ObservationStatus.AGENCY_ACCEPTED || observation.status === ObservationStatus.AGENCY_DISPUTED) {
+         return { error: "You have already responded to this observation." };
+      }
       return { error: "Observation cannot be responded to at this time." };
     }
+    
     if (observation.responseDeadline && new Date() > observation.responseDeadline) {
-      return { error: "Response deadline has passed. Observation may have been auto-accepted." };
+      // This is the SCN due date, so this check is valid
+      return { error: "Response deadline has passed." };
     }
-    if (!accepted && !evidencePath && observation.evidenceRequired) {
-        return { error: "Evidence is required to dispute this observation." };
-    }
-     if (!accepted && !response) {
+
+    if (!accepted && !response?.trim()) {
         return { error: "A response remark is required when disputing an observation." };
     }
 
@@ -573,20 +568,71 @@ export async function respondToObservationAction(
         agencyAccepted: accepted,
         agencyResponse: accepted ? null : response,
         agencyResponseDate: new Date(),
-        evidenceSubmitted: !accepted && !!evidencePath,
-        evidencePath: accepted ? null : evidencePath,
+        // --- 3. ADD THESE FIELDS ---
+        evidenceSubmitted: !!evidencePath,
+        evidencePath: evidencePath || null,
+        // --- END OF ADDED FIELDS ---
         status: newStatus,
       },
     });
+    
+    // --- 4. ADD SCN STATUS CHECK ---
+    if (updatedObservation.showCauseNoticeId) {
+      const noticeId = updatedObservation.showCauseNoticeId;
+      
+      // Check if all observations for this notice are now answered
+      const pendingObservations = await prisma.observation.count({
+        where: {
+          showCauseNoticeId: noticeId,
+          status: ObservationStatus.SENT_TO_AGENCY // Still waiting for response
+        }
+      });
+
+      if (pendingObservations === 0) {
+        // All observations are responded to, update the SCN status
+        const notice = await prisma.showCauseNotice.update({
+          where: { id: noticeId },
+          data: { status: ShowCauseStatus.RESPONDED }
+        });
+
+        // Notify admins that the SCN is ready for review
+        const admins = await prisma.user.findMany({
+          where: { role: { in: [UserRole.ADMIN, UserRole.SUPER_ADMIN] } },
+          select: { id: true },
+        });
+        
+        for (const admin of admins) {
+          await createNotificationAction(
+            admin.id,
+            NotificationType.SHOW_CAUSE_RESPONSE_RECEIVED,
+            "Show Cause Notice Responded",
+            `Agency ${session.user.name} has responded to all items in SCN: "${notice.subject}".`,
+            `/admin/show-cause/${noticeId}`, // Link to new admin SCN page
+            noticeId,
+            "show_cause_notice"
+          );
+        }
+      }
+    }
+    // --- END OF SCN STATUS CHECK ---
+
 
      await logFormActivityAction({
         action: ActivityAction.OBSERVATION_RESPONDED,
         entityType: 'observation',
         description: `Agency responded to observation ${observation.observationNumber}: ${accepted ? 'Accepted' : 'Disputed'}`,
         entityId: observation.id,
-        metadata: { auditId: observation.auditId, accepted, responseProvided: !!response, evidenceSubmitted: !!evidencePath }
+        // --- 5. UPDATE LOGGING METADATA ---
+        metadata: { 
+          auditId: observation.auditId, 
+          accepted, 
+          responseProvided: !!response, 
+          evidenceSubmitted: !!evidencePath, // Use the new variable
+          evidencePath: evidencePath || undefined // Add path to log
+        }
     });
 
+    // Notify admins (generic notification)
     const admins = await prisma.user.findMany({
       where: { role: { in: [UserRole.ADMIN, UserRole.SUPER_ADMIN] } },
       select: { id: true },
@@ -597,17 +643,21 @@ export async function respondToObservationAction(
     for (const admin of admins) {
       await createNotificationAction(
         admin.id,
-        NotificationType.SYSTEM_ALERT,
+        NotificationType.SYSTEM_ALERT, // This can be a generic alert
         notificationTitle,
         notificationMessage,
-        `/admin/observations/${observationId}`
+        `/admin/audits/${observation.auditId}` // Link to the main audit
       );
     }
 
+    // Revalidate all paths
     revalidatePath("/user/observations");
+    revalidatePath(`/user/show-cause/${updatedObservation.showCauseNoticeId}`); // Revalidate SCN page
     revalidatePath(`/user/observations/${observationId}`);
     revalidatePath("/admin/observations");
     revalidatePath(`/admin/observations/${observationId}`);
+    revalidatePath(`/admin/show-cause/${updatedObservation.showCauseNoticeId}`); // Revalidate admin SCN page
+    revalidatePath(`/admin/audits/${observation.auditId}`);
 
     return { success: true, observation: updatedObservation };
   } catch (error: unknown) { // Use unknown
@@ -618,6 +668,8 @@ export async function respondToObservationAction(
     return { error: "Failed to submit response due to an unknown error." };
   }
 }
+
+
 
 /**
  * Admin/Super Admin: Assign penalty to an accepted/auto-accepted observation
@@ -632,9 +684,8 @@ export async function assignPenaltyAction(data: {
   const headersList = await headers();
   const session = await auth.api.getSession({ headers: headersList });
 
-  // Explicit check
   if (!session || (session.user.role !== UserRole.ADMIN && session.user.role !== UserRole.SUPER_ADMIN)) {
-    return { error: "Forbidden: Only admins or super admins can assign penalties" };
+    return { error: "Unauthorized" };
   }
 
   try {
@@ -647,14 +698,12 @@ export async function assignPenaltyAction(data: {
       return { error: "Observation not found" };
     }
 
-    // Ensure penalty can be assigned (observation accepted or auto-accepted)
-    // Corrected check:
-    if (observation.status !== ObservationStatus.AGENCY_ACCEPTED && observation.status !== ObservationStatus.AUTO_ACCEPTED) {
-        return { error: "Penalty can only be assigned to accepted or auto-accepted observations." };
+    if (observation.status !== ObservationStatus.AGENCY_ACCEPTED && observation.status !== ObservationStatus.AUTO_ACCEPTED && observation.status !== ObservationStatus.AGENCY_DISPUTED) {
+      return { error: "Penalty can only be assigned to accepted, auto-accepted, or disputed observations." };
     }
 
-    if (observation.penaltyAssigned) {
-        return { error: "A penalty has already been assigned to this observation." };
+    if (observation.penaltyAssigned || observation.penaltyId) {
+        return { error: "Penalty has already been assigned to this observation" };
     }
 
     const result = await prisma.$transaction(async (prisma) => {
@@ -667,8 +716,10 @@ export async function assignPenaltyAction(data: {
                 deductionMonth: data.deductionMonth,
                 correctiveAction: data.correctiveAction,
                 assignedBy: session.user.id,
-                status: PenaltyStatus.DRAFT,
+                status: PenaltyStatus.DRAFT, // Or SUBMITTED if it's immediate
                 assignedAt: new Date(),
+                // --- 6. ADD THIS LINE ---
+                noticeRefNo: observation.showCauseNoticeId ? `SCN-${observation.showCauseNoticeId.slice(0, 8)}` : `OBS-${observation.id.slice(0, 8)}`
             },
         });
 
@@ -677,7 +728,7 @@ export async function assignPenaltyAction(data: {
             data: {
                 penaltyAssigned: true,
                 penaltyId: penalty.id,
-                status: ObservationStatus.CLOSED,
+                status: ObservationStatus.CLOSED, // Final status
             },
         });
 
@@ -687,22 +738,30 @@ export async function assignPenaltyAction(data: {
     await logFormActivityAction({
         action: ActivityAction.PENALTY_ASSIGNED,
         entityType: 'penalty',
-        description: `Assigned penalty (ID: ${result.penalty.id}) of ${data.penaltyAmount} for observation ${observation.observationNumber}`,
+        description: `Penalty of ${result.penalty.penaltyAmount} assigned to observation ${observation.observationNumber}`,
         entityId: result.penalty.id,
-        metadata: { observationId: data.observationId, amount: data.penaltyAmount, deductionMonth: data.deductionMonth }
+        metadata: { auditId: observation.auditId, observationId: observation.id, amount: data.penaltyAmount },
     });
+    
+    await createNotificationAction(
+        observation.audit.agencyId,
+        NotificationType.SYSTEM_ALERT,
+        "Penalty Assigned",
+        `A penalty of ₹${data.penaltyAmount} has been assigned for observation ${observation.observationNumber}.`,
+        `/forms/penaltyMatrix` // Link to the new read-only matrix
+    );
 
     revalidatePath("/admin/observations");
     revalidatePath(`/admin/observations/${data.observationId}`);
     revalidatePath("/admin/penalties");
+    revalidatePath(`/forms/penaltyMatrix`); // Revalidate agency penalty form
+    revalidatePath(`/user/show-cause/${result.updatedObservation.showCauseNoticeId}`); // Revalidate SCN page
+    revalidatePath(`/admin/show-cause/${result.updatedObservation.showCauseNoticeId}`); // Revalidate admin SCN page
 
     return { success: true, penalty: result.penalty };
-  } catch (error: unknown) { // Use unknown
+  } catch (error: unknown) {
     console.error("Error assigning penalty:", error);
-     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        return { error: "Failed to assign penalty due to a conflict. Please check observation status." };
-    }
-     if (error instanceof Error) {
+    if (error instanceof Error) {
         return { error: `Failed to assign penalty: ${error.message}` };
     }
     return { error: "Failed to assign penalty due to an unknown error." };

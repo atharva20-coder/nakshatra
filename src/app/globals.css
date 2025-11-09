@@ -118,3 +118,15 @@
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes marquee {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+
+.marquee-text {
+  animation: marquee 15s linear infinite;
+  white-space: nowrap;
+  padding-left: 100%; /* Start off-screen */
+  display: inline-block;
+}

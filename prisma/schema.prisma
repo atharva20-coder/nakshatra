@@ -33,6 +33,7 @@ model User {
   banned                      Boolean?                            @default(false)
   banReason                   String?
   banExpires                  DateTime?
+
   accounts                    Account[]
 
   // Form Relations
@@ -44,13 +45,13 @@ model User {
   telephoneDeclaration        TelephoneDeclaration[]
   agencyManpowerRegister      AgencyManpowerRegister[]
   productDeclaration          ProductDeclaration[]
-  agencyPenaltyMatrix         AgencyPenaltyMatrix[]
+  agencyPenaltyMatrix         AgencyPenaltyMatrix[] // Note: This model is now legacy
   agencyTrainingTracker       AgencyTrainingTracker[]
   proactiveEscalationTracker  ProactiveEscalationTracker[]
   escalationDetails           EscalationDetails[]
   paymentRegister             PaymentRegister[]
   repoKitTracker              RepoKitTracker[]
-  noDuesDeclarations          NoDuesDeclaration[] // <-- NEW FORM 1 RELATION
+  noDuesDeclarations          NoDuesDeclaration[]
 
   posts                       Post[]
   sessions                    Session[]
@@ -72,6 +73,14 @@ model User {
   cmProfile                   CollectionManagerProfile?
   cmAssignedAgencies          CMAgencyAssignment[] @relation("CMAssignedAgencies")
   cmApprovalsReceived         CMApproval[] @relation("CMApprovals")
+
+  // --- NEW SCN & ANNOUNCEMENT RELATIONS ---
+  issuedShowCauseNotices      ShowCauseNotice[]   @relation("IssuedByAdmin")
+  receivedShowCauseNotices    ShowCauseNotice[]   @relation("ReceivedByAgency")
+  showCauseResponses          ShowCauseResponse[]
+  createdAnnouncements        Announcement[]
+  readAnnouncements           AnnouncementRead[]
+  // --- END NEW RELATIONS ---
 
   @@map("users")
 }
@@ -118,12 +127,12 @@ model CodeOfConductDetail {
 
 // 2. Declaration Cum Undertaking
 model DeclarationCumUndertaking {
-  id                          String                            @id @default(uuid())
-  createdAt                   DateTime                          @default(now())
-  updatedAt                   DateTime                          @updatedAt
+  id                          String                             @id @default(uuid())
+  createdAt                   DateTime                           @default(now())
+  updatedAt                   DateTime                           @updatedAt
   userId                      String
-  user                        User                              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  status                      SubmissionStatus                  @default(DRAFT)
+  user                        User                               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status                      SubmissionStatus                   @default(DRAFT)
   collectionManagers          DeclarationCollectionManager[]
 
   @@map("declaration_cum_undertaking")
@@ -216,7 +225,7 @@ model ComplianceResponse {
   parameterId   String
   parameter     ComplianceParameter @relation(fields: [parameterId], references: [id], onDelete: Cascade)
   complied      ComplianceStatus @default(PENDING)
-  agencyRemarks String?          @db.Text
+  agencyRemarks String?  @db.Text
   approvals     Json?
   lastUpdatedBy String?
 
@@ -346,7 +355,9 @@ model ProductDetail {
   @@map("product_details")
 }
 
-// 9. Agency Penalty Matrix
+// 9. Agency Penalty Matrix (Legacy Model)
+// This model is no longer used for new penalties. It is kept for historical data.
+// The new "Penalty Matrix" is a read-only view of the `Penalty` model.
 model AgencyPenaltyMatrix {
   id        String           @id @default(uuid())
   createdAt DateTime         @default(now())
@@ -360,19 +371,19 @@ model AgencyPenaltyMatrix {
 }
 
 model PenaltyDetail {
-  id                          String                @id @default(uuid())
-  noticeRefNo                 String
-  nonComplianceMonth          String
-  parameter                   String
-  product                     String
-  penaltyAmount               Decimal               @db.Decimal(10, 2)
-  penaltyDeductedMonth        String
-  correctiveActionTaken       String
-  agency                      String
-  agencyAuthorisedPersonSign  String
-  signOfFpr                   String
-  penaltyMatrixId             String
-  penaltyMatrix               AgencyPenaltyMatrix @relation(fields: [penaltyMatrixId], references: [id], onDelete: Cascade)
+  id                           String                @id @default(uuid())
+  noticeRefNo                  String
+  nonComplianceMonth           String
+  parameter                    String
+  product                      String
+  penaltyAmount                Decimal               @db.Decimal(10, 2)
+  penaltyDeductedMonth         String
+  correctiveActionTaken        String
+  agency                       String
+  agencyAuthorisedPersonSign   String
+  signOfFpr                    String
+  penaltyMatrixId              String
+  penaltyMatrix                AgencyPenaltyMatrix @relation(fields: [penaltyMatrixId], references: [id], onDelete: Cascade)
 
   @@map("penalty_details")
 }
@@ -530,10 +541,7 @@ model RepoKitDetail {
   @@map("repo_kit_details")
 }
 
-// ============================================
-// --- NEW FORM 1: NO DUES / DATA PURGING ---
-// ============================================
-
+// 15. No Dues Declaration
 model NoDuesDeclaration {
   id        String           @id @default(uuid())
   createdAt DateTime         @default(now())
@@ -561,18 +569,12 @@ model NoDuesDetail {
   month             String            // Month of declaration (e.g., "Nov-2025")
   remarksBillAmount String?           // "No Dues" or "Bill Amount: 5000"
   
-  // CM Approval is handled by the `CMApproval` model.
-  // A row is created in `CMApproval` linking to this `NoDuesDetail` row's `id`.
-  
   @@map("no_dues_details")
   @@index([formId])
 }
 
 
-// ============================================
-// --- NEW FORM 2: AUDIT SCORECARD ---
-// ============================================
-
+// 16. Audit Scorecard
 model AuditScorecard {
   id            String   @id @default(uuid())
   createdAt     DateTime @default(now())
@@ -581,8 +583,6 @@ model AuditScorecard {
   auditId       String   @unique // One scorecard per audit
   audit         Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
 
-  // --- THIS IS THE RELATIONAL APPROVAL ---
-  // This links to the Auditor *Profile* (Auditor model), not the User model.
   auditorProfileId String   
   auditor          Auditor  @relation("AuditorScorecards", fields: [auditorProfileId], references: [id], onDelete: Restrict)
   
@@ -594,8 +594,6 @@ model AuditScorecard {
 
   finalObservation String @db.Text
   justification    String @db.Text
-
-  // The "approval" is the existence of this record, signed off by the auditor.
   signedAt         DateTime @default(now())
   
   @@map("audit_scorecards")
@@ -607,7 +605,6 @@ model AuditScorecard {
 // --- APPROVAL & AUTH MODELS ---
 // ============================================
 
-// Approval Request System
 model ApprovalRequest {
   id            String            @id @default(uuid())
   createdAt     DateTime          @default(now())
@@ -627,7 +624,6 @@ model ApprovalRequest {
   @@map("approval_requests")
 }
 
-// File Upload Management
 model UploadedFile {
   id            String   @id @default(uuid())
   createdAt     DateTime @default(now())
@@ -748,7 +744,7 @@ model CollectionManagerProfile {
   productsAssigned      String[]
   
   supervisorId          String?
-  supervisor            CollectionManagerProfile? @relation("CMSupervisor", fields: [supervisorId], references: [id], onDelete: SetNull)
+  supervisor            CollectionManagerProfile?  @relation("CMSupervisor", fields: [supervisorId], references: [id], onDelete: SetNull)
   subordinates          CollectionManagerProfile[] @relation("CMSupervisor")
   supervisorDesignation String?
   
@@ -780,7 +776,7 @@ model CMAgencyAssignment {
   isActive        Boolean  @default(true)
   
   viewedByAt      DateTime?
-  
+
   @@unique([cmProfileId, agencyId])
   @@map("cm_agency_assignments")
   @@index([cmProfileId])
@@ -788,7 +784,6 @@ model CMAgencyAssignment {
   @@index([isActive])
 }
 
-// CM Approval Records (tracks all row-level approvals)
 model CMApproval {
   id                    String   @id @default(uuid())
   createdAt             DateTime @default(now())
@@ -805,7 +800,7 @@ model CMApproval {
   
   approvalSignature     String
   productTag            String
-  remarks               String?  // <-- THIS IS THE FIELD YOU WANTED
+  remarks               String?
   
   ipAddress             String?
   userAgent             String?
@@ -818,7 +813,6 @@ model CMApproval {
   @@index([createdAt])
 }
 
-// CM Compliance Signature (tracks product-level sign-off for compliance)
 model CMComplianceSignature {
   id          String   @id @default(uuid())
   
@@ -845,7 +839,7 @@ model AuditingFirm {
   updatedAt DateTime @updatedAt
   name      String   @unique
 
-  address       String? @db.Text
+  address       String?  @db.Text
   contactPerson String?
   contactEmail  String?
   contactPhone  String?
@@ -868,7 +862,7 @@ model Auditor {
   firm        AuditingFirm @relation(fields: [firmId], references: [id], onDelete: Cascade)
 
   audits          Audit[]
-  auditScorecards AuditScorecard[] @relation("AuditorScorecards") // <-- NEW RELATION
+  auditScorecards AuditScorecard[] @relation("AuditorScorecards")
 
   @@map("auditors")
 }
@@ -917,7 +911,7 @@ model Audit {
 // Observation model
 model Observation {
   id                 String              @id @default(uuid())
-  createdAt          DateTime            @default(now())
+  createdAt          DateTime            @default(now()) // <-- This is WHEN the observation was created
   updatedAt          DateTime            @updatedAt
   auditId            String
   audit              Audit               @relation(fields: [auditId], references: [id], onDelete: Cascade)
@@ -939,11 +933,17 @@ model Observation {
   autoAcceptedAt     DateTime?
   penaltyAssigned    Boolean             @default(false)
   penaltyId          String?             @unique
-  penalty            Penalty?            @relation(fields: [penaltyId], references: [id])
+  penalty            Penalty?            @relation(fields: [penaltyId], references: [id], onDelete: SetNull)
+
+  // --- SCN RELATION ---
+  showCauseNoticeId  String?
+  showCauseNotice    ShowCauseNotice?    @relation(fields: [showCauseNoticeId], references: [id], onDelete: SetNull)
+  // --- END SCN RELATION ---
 
   @@map("observations")
   @@index([auditId])
   @@index([status])
+  @@index([showCauseNoticeId])
 }
 
 // Penalty model
@@ -959,6 +959,10 @@ model Penalty {
   penaltyReason        String        @db.Text
   deductionMonth       String
   status               PenaltyStatus @default(DRAFT)
+  
+  // --- NEW FIELD ---
+  noticeRefNo          String?       // Stores the SCN ID or a reference
+
   assignedBy           String
   assignedAt           DateTime      @default(now())
   submittedAt          DateTime?
@@ -970,6 +974,94 @@ model Penalty {
   @@index([agencyId])
   @@index([status])
 }
+
+
+// ============================================
+// --- NEW SCN MODELS ---
+// ============================================
+
+model ShowCauseNotice {
+  id              String   @id @default(uuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  issuedByAdminId String
+  issuedByAdmin   User     @relation("IssuedByAdmin", fields: [issuedByAdminId], references: [id], onDelete: Restrict) // Admin who issued it
+
+  receivedByAgencyId String
+  receivedByAgency   User     @relation("ReceivedByAgency", fields: [receivedByAgencyId], references: [id], onDelete: Cascade) // Agency who received it
+
+  subject         String   @db.Text
+  details         String   @db.Text
+  responseDueDate DateTime
+  
+  status          ShowCauseStatus @default(ISSUED)
+  adminRemarks    String?         @db.Text // Final closing remarks from admin
+
+  observations    Observation[]
+  responses       ShowCauseResponse[]
+  
+  @@map("show_cause_notices")
+  @@index([issuedByAdminId])
+  @@index([receivedByAgencyId])
+  @@index([status])
+}
+
+model ShowCauseResponse {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  
+  noticeId  String
+  notice    ShowCauseNotice @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade) // Agency user who responded
+  
+  response  String   @db.Text // This is a general response to the SCN, not the observation
+  
+  @@map("show_cause_responses")
+  @@index([noticeId])
+  @@index([authorId])
+}
+
+// ============================================
+// --- NEW ANNOUNCEMENT MODELS ---
+// ============================================
+
+model Announcement {
+  id          String     @id @default(uuid())
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  authorId    String
+  author      User       @relation(fields: [authorId], references: [id], onDelete: Restrict) // Super Admin
+
+  title       String     @db.Text
+  content     String     @db.Text
+  
+  audience    UserRole[] // Array of roles to target (e.g., [ADMIN, USER, AUDITOR])
+  
+  readBy      AnnouncementRead[]
+
+  @@map("announcements")
+  @@index([authorId])
+}
+
+model AnnouncementRead {
+  id             String       @id @default(uuid())
+  readAt         DateTime     @default(now())
+  
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId]) // User can only read an announcement once
+  @@map("announcement_reads")
+  @@index([userId])
+}
+
 
 // ============================================
 // --- ENUMS ---
@@ -1011,6 +1103,10 @@ enum NotificationType {
   FORM_SUBMITTED
   FORM_LOCKED
   SYSTEM_ALERT
+  // --- NEW ---
+  SHOW_CAUSE_ISSUED
+  SHOW_CAUSE_RESPONSE_RECEIVED
+  SHOW_CAUSE_CLOSED
 }
 
 enum ActivityAction {
@@ -1033,6 +1129,10 @@ enum ActivityAction {
   PENALTY_ASSIGNED
   PENALTY_SUBMITTED
   AGENCY_ASSIGNED_TO_FIRM
+  // --- NEW ---
+  SHOW_CAUSE_ISSUED
+  SHOW_CAUSE_RESPONDED
+  SHOW_CAUSE_CLOSED
 }
 
 enum AuditStatus {
@@ -1072,4 +1172,11 @@ enum ComplianceStatus {
   YES
   NO
   NA
+}
+
+// --- NEW ---
+enum ShowCauseStatus {
+  ISSUED
+  RESPONDED
+  CLOSED
 }
