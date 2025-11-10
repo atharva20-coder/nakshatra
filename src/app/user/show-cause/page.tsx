@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getShowCauseNoticesForAgencyAction } from "@/actions/show-cause-notice.action";
-import { PageHeader } from "@/components/agency-page-header";
+import { PageHeader } from "@/components/agency-page-header"; // Use new unified header
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -26,26 +26,29 @@ export default async function ShowCauseListPage() {
   const session = await auth.api.getSession({ headers: headersList });
   if (!session) redirect("/auth/login");
 
-  const { notices, error } = await getShowCauseNoticesForAgencyAction();
+  const result = await getShowCauseNoticesForAgencyAction();
 
-  if (error) {
+  // Handle the error case
+  if (!result.success) {
      return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <PageHeader returnHref="/user/dashboard" returnLabel="Back to Dashboard" />
+        <PageHeader />
         <div className="container mx-auto p-8">
           <Alert variant="destructive" className="mt-8">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{result.error}</AlertDescription>
           </Alert>
         </div>
       </div>
     );
   }
 
+  const notices = result.data; // <-- Use `data`
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <PageHeader returnHref="/user/dashboard" returnLabel="Back to Dashboard" />
+      <PageHeader />
       <div className="container mx-auto p-8 space-y-8">
         <Card>
           <CardHeader>

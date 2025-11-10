@@ -1168,7 +1168,7 @@ export async function getAuditForAdminAction(auditId: string) {
       return { error: "Audit not found" };
     }
     
-    return { success: true, audit };
+    return { success: true, data: audit, audit };
 
   } catch (error) {
     return { error: getErrorMessage(error) };

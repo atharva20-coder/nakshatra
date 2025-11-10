@@ -38,7 +38,7 @@ export async function getAuditReviewQueueAction() {
       },
     });
 
-    return { success: true, audits };
+    return { success: true, data: audits, audits };
   } catch (error) {
     return { error: getErrorMessage(error) };
   }
