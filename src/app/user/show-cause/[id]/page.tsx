@@ -7,18 +7,20 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { ShowCauseNoticeClient } from "@/components/show-cause-notice-client";
 
-// ✅ FIX: params is now a Promise, as per Next.js App Router spec
+// ✅ params should be a plain object, not a Promise
 interface PageProps {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }
 
 // --- Extract the successful return type from the action ---
-type ShowCauseDetailsReturn = Awaited<ReturnType<typeof getShowCauseNoticeDetailsAction>>;
+type ShowCauseDetailsReturn = Awaited<
+  ReturnType<typeof getShowCauseNoticeDetailsAction>
+>;
 type SuccessData = Extract<ShowCauseDetailsReturn, { success: true }>["data"];
 type NoticeType = SuccessData["notice"];
 
 export default async function ShowCauseNoticePage({ params }: PageProps) {
-  const { id } = await params; // ✅ FIX: params must be awaited
+  const { id } = params; // ✅ do not await params
   const headersList = await headers();
   const session = await auth.api.getSession({ headers: headersList });
 
@@ -43,16 +45,16 @@ export default async function ShowCauseNoticePage({ params }: PageProps) {
     );
   }
 
-  const { notice, isAdmin } = result.data as { notice: NoticeType; isAdmin: boolean };
+  const { notice, isAdmin } = result.data as {
+    notice: NoticeType;
+    isAdmin: boolean;
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <PageHeader />
       <div className="container mx-auto p-8 space-y-8">
-        <ShowCauseNoticeClient 
-          notice={notice as NoticeType} 
-          isAgencyView={!isAdmin} 
-        />
+        <ShowCauseNoticeClient notice={notice} isAgencyView={!isAdmin} />
       </div>
     </div>
   );
