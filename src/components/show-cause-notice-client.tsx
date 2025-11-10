@@ -23,7 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { respondToObservationAction } from "@/actions/audit-management.action";
-import { Loader2, AlertTriangle, File, Link as LinkIcon } from "lucide-react";
+import { Loader2, AlertTriangle, File as FileIcon, Link as LinkIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { assignPenaltyAction } from "@/actions/audit-management.action"; // For Admin
 import { closeShowCauseNoticeAction } from "@/actions/show-cause-notice.action"; // For Admin
@@ -37,16 +37,18 @@ type ObservationWithAuditDetails = Observation & {
     firm: { name: string } | null;
     auditor: Auditor & {
       user: { name: string } | null;
-    };
-  };
+    } | null;
+  } | null;
 };
 
 type NoticeWithRelations = ShowCauseNotice & {
-  issuedByAdmin: { name: string | null };
-  receivedByAgency: { name: string | null };
+  adminRemarks?: string | null; // added
+  issuedByAdmin: { name: string | null } | null;
+  receivedByAgency: { name: string | null } | null;
   observations: ObservationWithAuditDetails[];
-  responses: (ShowCauseResponse & { author: { name: string | null } })[];
+  responses: (ShowCauseResponse & { author: { name: string | null } | null })[];
 };
+
 // --- End of complex type ---
 
 interface ShowCauseNoticeClientProps {
@@ -80,6 +82,7 @@ export function ShowCauseNoticeClient({ notice, isAgencyView }: ShowCauseNoticeC
       case "ISSUED": return <Badge className="bg-yellow-100 text-yellow-800">Issued (Awaiting Response)</Badge>;
       case "RESPONDED": return <Badge className="bg-blue-100 text-blue-800">Responded (Under Review)</Badge>;
       case "CLOSED": return <Badge className="bg-gray-100 text-gray-800">Closed</Badge>;
+      default: return <Badge>{status}</Badge>;
     }
   };
 
@@ -213,7 +216,7 @@ export function ShowCauseNoticeClient({ notice, isAgencyView }: ShowCauseNoticeC
             <div>
               <CardTitle className="text-2xl">{notice.subject}</CardTitle>
               <CardDescription className="mt-2">
-                Issued by: {notice.issuedByAdmin.name} | 
+                Issued by: {notice.issuedByAdmin?.name || "N/A"} | 
                 Due Date: {new Date(notice.responseDueDate).toLocaleDateString()}
               </CardDescription>
             </div>
@@ -224,6 +227,20 @@ export function ShowCauseNoticeClient({ notice, isAgencyView }: ShowCauseNoticeC
           <div>
             <h4 className="font-semibold">Notice Details:</h4>
             <p className="text-sm p-4 bg-gray-50 dark:bg-gray-800 rounded border whitespace-pre-wrap">{notice.details}</p>
+          </div>
+
+          {/* ✅ Admin Remarks section goes here */}
+          <div>
+            <h4 className="font-semibold mt-4">Admin Remarks:</h4>
+            {notice?.adminRemarks ? (
+              <p className="text-sm p-4 bg-gray-50 dark:bg-gray-800 rounded border whitespace-pre-wrap">
+                {notice.adminRemarks}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">
+                No admin remarks yet.
+              </p>
+            )}
           </div>
 
           <div>
@@ -254,8 +271,8 @@ export function ShowCauseNoticeClient({ notice, isAgencyView }: ShowCauseNoticeC
                       
                       {/* --- ADMIN VISIBILITY FIX - DISPLAYING INFO --- */}
                       <TableCell className="text-xs">
-                        <p><strong>Firm:</strong> {obs.audit.firm?.name || 'N/A'}</p>
-                        <p><strong>Auditor:</strong> {obs.audit.auditor?.user?.name || 'N/A'}</p>
+                        <p><strong>Firm:</strong> {obs.audit?.firm?.name || 'N/A'}</p>
+                        <p><strong>Auditor:</strong> {obs.audit?.auditor?.user?.name || 'N/A'}</p>
                         <p><strong>On:</strong> {new Date(obs.createdAt).toLocaleDateString()}</p>
                       </TableCell>
                       {/* --- END FIX --- */}
@@ -369,7 +386,7 @@ export function ShowCauseNoticeClient({ notice, isAgencyView }: ShowCauseNoticeC
                   />
                   {file && (
                     <p className="text-xs text-green-600 flex items-center">
-                      <File className="h-3 w-3 mr-1" /> Ready to upload: {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                      <FileIcon className="h-3 w-3 mr-1" /> Ready to upload: {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
                     </p>
                   )}
                 </div>
@@ -439,3 +456,4 @@ export function ShowCauseNoticeClient({ notice, isAgencyView }: ShowCauseNoticeC
     </>
   );
 }
+export default ShowCauseNoticeClient;

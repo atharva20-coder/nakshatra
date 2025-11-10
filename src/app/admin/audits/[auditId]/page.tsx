@@ -1,87 +1,103 @@
 // src/app/admin/audits/[auditId]/page.tsx
-import { getAuditForAdminAction } from "@/actions/audit-management.action";
+import { getAuditDetailsForAdminAction } from "@/actions/audit-management.action";
+import { ObservationListAdmin } from "@/components/admin/ObservationListAdmin";
 import { ScorecardForm } from "@/components/admin/ScorecardForm";
 import { ReturnButton } from "@/components/return-button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { AlertCircle, Building2, Calendar, User } from "lucide-react";
 
 interface PageProps {
   params: Promise<{ auditId: string }>;
 }
 
-export default async function AdminAuditReviewPage({ params }: PageProps) {
+export default async function AdminAuditDetailPage({ params }: PageProps) {
   const { auditId } = await params;
-  const { audit, error } = await getAuditForAdminAction(auditId);
+  const result = await getAuditDetailsForAdminAction(auditId);
 
-  if (error || !audit) {
+  if (!result.success || !result.data) {
     return (
       <div className="container mx-auto p-8">
-        <ReturnButton href="/admin/dashboard" label="Back to Dashboard" />
+        <ReturnButton href="/admin/audits" label="Back to Audits" />
         <Alert variant="destructive" className="mt-8">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error || "Audit not found."}</AlertDescription>
+          <AlertDescription>{result.error || "Audit not found."}</AlertDescription>
         </Alert>
       </div>
     );
   }
 
+  const audit = result.data;
+
   return (
     <div className="container mx-auto p-8 space-y-8">
-      <div className="flex justify-between items-center">
+      {/* Header */}
+      <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold">Audit Review & Scorecard</h1>
-          <p className="text-muted-foreground">
-            Review observations for <strong>{audit.agency.name}</strong> and publish the final scorecard.
+          <h1 className="text-3xl font-bold">Audit Management</h1>
+          <p className="text-muted-foreground mt-1">
+            Review observations, issue Show Cause Notices, and publish scorecards
           </p>
         </div>
-        <ReturnButton href="/admin/dashboard" label="Back to Dashboard" />
+        <ReturnButton href="/admin/audits" label="Back to Audits" />
       </div>
 
-      {/* Observations (Read-Only) */}
-      <Card>
+      {/* Audit Summary Card */}
+      <Card className="border-2 border-blue-200 bg-blue-50/50">
         <CardHeader>
-          <CardTitle>Observations from {audit.firm.name}</CardTitle>
-          <CardDescription>
-            Audit conducted by {audit.auditorName} on {new Date(audit.auditDate).toLocaleDateString()}.
-          </CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-blue-600" />
+            Audit Summary
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Obs. #</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Severity</TableHead>
-                <TableHead>Description</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {audit.observations.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center">
-                    No observations were recorded for this audit.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                audit.observations.map(obs => (
-                  <TableRow key={obs.id}>
-                    <TableCell>{obs.observationNumber}</TableCell>
-                    <TableCell>{obs.category}</TableCell>
-                    <TableCell>{obs.severity}</TableCell>
-                    <TableCell className="whitespace-pre-wrap">{obs.description}</TableCell>
-                  </TableRow>
-                ))
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Agency</p>
+              <p className="font-semibold text-gray-900">{audit.agency.name}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Auditing Firm</p>
+              <p className="font-semibold text-gray-900">{audit.firm?.name || 'N/A'}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 mb-1 flex items-center gap-1">
+                <User className="h-3 w-3" />
+                Individual Auditor
+              </p>
+              <p className="font-semibold text-gray-900">
+                {audit.auditorName || audit.auditor?.user?.name || 'N/A'}
+              </p>
+              {audit.auditorEmployeeId && (
+                <p className="text-xs text-gray-500">ID: {audit.auditorEmployeeId}</p>
               )}
-            </TableBody>
-          </Table>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 mb-1 flex items-center gap-1">
+                <Calendar className="h-3 w-3" />
+                Audit Date
+              </p>
+              <p className="font-semibold text-gray-900">
+                {new Date(audit.auditDate).toLocaleDateString()}
+              </p>
+              <Badge variant="outline" className="mt-1">
+                {audit.status}
+              </Badge>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Scorecard Form */}
-      <ScorecardForm auditId={audit.id} initialData={audit.scorecard} />
+      {/* Observations Section (with SCN Issuance) */}
+      <ObservationListAdmin initialAudit={audit} />
+
+      {/* Scorecard Section */}
+      <div className="border-t-4 border-gray-200 pt-8">
+        <h2 className="text-2xl font-bold mb-6">Audit Scorecard</h2>
+        <ScorecardForm auditId={audit.id} initialData={audit.scorecard} />
+      </div>
     </div>
   );
 }
