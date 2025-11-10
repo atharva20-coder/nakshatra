@@ -65,7 +65,7 @@ export const AgencyAuditClient = ({ agency, audits }: AgencyAuditClientProps) =>
         setAuditorName("");
         setAuditorEmpId("");
         setIsModalOpen(false);
-        router.push(`/auditor/agencies/${agency.id}/audit/${result.newAudit!.id}`);
+        router.push(`/auditor/audit/${result.newAudit!.id}`);
       }
     });
   };

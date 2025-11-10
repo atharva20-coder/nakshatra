@@ -77,7 +77,7 @@ export default async function Page() {
           
           <Card className="hover:shadow-lg transition-shadow border-2 border-transparent hover:border-blue-500">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Audit Review Queue & Show Cause Notice</CardTitle>
+              <CardTitle>Audit Review Queue, Show Cause Notice, & Score Card</CardTitle>
               <FileCheck2 className="h-6 w-6 text-blue-500" />
             </CardHeader>
             <CardContent>
@@ -88,20 +88,6 @@ export default async function Page() {
             </CardContent>
           </Card>
 
-          {/* --- NEW SCN CARD --- */}
-          <Card className="hover:shadow-lg transition-shadow border-2 border-transparent hover:border-red-500">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Score Cards</CardTitle>
-              <GraduationCap className="h-6 w-6 text-gray-400"/>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 mb-4">Review completed audits and publish scorecards.</p>
-              <Link href="/admin/scoreCard" className="text-red-600 font-semibold hover:underline">
-                Assign Scores and Grades
-              </Link>
-            </CardContent>
-          </Card>
-          {/* --- END NEW CARD --- */}
 
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between">

@@ -32,7 +32,7 @@ export default async function ShowCauseNoticePage({ params }: PageProps) {
   const result = await getShowCauseNoticeDetailsAction(id);
 
   // --- THIS IS THE FIX ---
-  // Handle the error case first
+// Handle the error case first
   if (!result.success) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">

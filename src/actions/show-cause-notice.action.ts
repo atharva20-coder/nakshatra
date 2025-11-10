@@ -89,7 +89,7 @@ export async function issueShowCauseNoticeAction(
     revalidatePath(`/admin/audits`); // Revalidate admin audit pages
     revalidatePath(`/user/show-cause`); // Revalidate new agency SCN list page
 
-    return { success: true, data: newNotice };
+    return { success: true, data: newNotice, newNotice };
   } catch (error) {
     return { error: getErrorMessage(error) };
   }
@@ -220,7 +220,7 @@ export async function closeShowCauseNoticeAction(noticeId: string, adminRemarks:
     revalidatePath(`/admin/show-cause/${noticeId}`);
     revalidatePath(`/user/show-cause/${noticeId}`);
     
-    return { success: true, data: notice };
+    return { success: true, data: notice, notice };
   } catch (error) {
     return { error: getErrorMessage(error) };
   }
