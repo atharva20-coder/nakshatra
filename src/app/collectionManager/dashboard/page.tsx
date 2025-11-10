@@ -19,6 +19,7 @@ import { UserRole } from "@/generated/prisma";
 import { ReturnButton } from "@/components/return-button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { AdvisoryMarquee } from "@/components/AdvisoryMarquee";
 
 // FIX: Client components cannot be async
 export default function CMDashboardPage() {
@@ -178,7 +179,7 @@ export default function CMDashboardPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6 min-h-screen">
-      
+      <AdvisoryMarquee />
       {/* --- NEW ASSIGNMENT BANNER --- */}
       {newAgencies.length > 0 && (
         <Card className="border-blue-500 bg-blue-50 dark:bg-blue-900/30">

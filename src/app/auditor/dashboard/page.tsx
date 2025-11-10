@@ -1,5 +1,6 @@
 // src/app/auditor/dashboard/page.tsx
 import { getAuditorDashboardDataAction } from "@/actions/auditor.action";
+import { AdvisoryMarquee } from "@/components/AdvisoryMarquee";
 import { AuditorDashboardClient } from "@/components/audit/AuditorDashboardClient";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
@@ -22,6 +23,7 @@ export default async function AuditorDashboardPage() {
 
   return (
     <div className="container mx-auto p-8">
+      <AdvisoryMarquee />
       <h1 className="text-3xl font-bold mb-2">Auditor Dashboard</h1>
       <p className="text-muted-foreground mb-6">
         Welcome, <strong>{result.firm?.name}</strong>.

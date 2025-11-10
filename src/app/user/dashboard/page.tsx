@@ -13,6 +13,7 @@ import { ReturnButton } from "@/components/return-button";
 import { getCompletedAuditsForAgency } from "@/actions/agency-actions"; // <-- IMPORT AUDIT ACTION
 import { Star } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"; // <-- IMPORT TABLE COMPONENTS
+import { AdvisoryMarquee } from "@/components/AdvisoryMarquee";
 
 // Define form table mappings
 const FORM_TABLE_MAPPINGS = {
@@ -322,6 +323,7 @@ export default async function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-6 py-8">
+        <AdvisoryMarquee />
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">

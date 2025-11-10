@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { DeactivateUserToggle } from "@/components/deactivate-user-toggle";
-import { UserCheck, Settings, LinkIcon, FileText, Building, FileCheck2, ListChecks } from "lucide-react"; // Added ListChecks
+import { UserCheck, Settings, LinkIcon, FileText, Building, FileCheck2, ListChecks, Megaphone } from "lucide-react"; // Added ListChecks
 
 export default async function Page() {
   const headersList = await headers();
@@ -174,6 +174,24 @@ export default async function Page() {
               <Button size="sm" asChild>
                 <Link href="/super/compliance-parameters">
                   <LinkIcon className="mr-2 h-4 w-4" /> Manage Parameters
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+          
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Announcements</CardTitle>
+              <Megaphone className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">Manage Announcements</div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Create advisories for Admins, Agencies, Auditors & Collection Managers
+              </p>
+              <Button size="sm" asChild>
+                <Link href="/super/announcements">
+                  <LinkIcon className="mr-2 h-4 w-4" /> Manage Announcements
                 </Link>
               </Button>
             </CardContent>

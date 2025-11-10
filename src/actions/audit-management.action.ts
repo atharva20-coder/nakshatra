@@ -1229,3 +1229,82 @@ export async function saveAuditScorecardAction(data: {
     return { error: getErrorMessage(error) };
   }
 }
+
+/**
+ * Admin: Get all details for a single audit (for SCN issuing & Scorecard)
+ */
+export async function getAuditDetailsForAdminAction(auditId: string) {
+  const headersList = await headers();
+  const session = await auth.api.getSession({ headers: headersList });
+
+  if (!session || (session.user.role !== UserRole.ADMIN && session.user.role !== UserRole.SUPER_ADMIN)) {
+    return { success: false, error: "Forbidden" as const };
+  }
+
+  try {
+    const audit = await prisma.audit.findUnique({
+      where: { id: auditId },
+      include: {
+        agency: {
+          select: { id: true, name: true }
+        },
+        firm: {
+          select: { name: true }
+        },
+        auditor: {
+          include: {
+            user: {
+              select: { name: true }
+            }
+          }
+        },
+        observations: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            penalty: true,
+            showCauseNotice: { // Also get SCN info
+              select: { id: true, subject: true }
+            }
+          }
+        },
+        scorecard: true // Include scorecard data
+      }
+    });
+
+    if (!audit) {
+      return { success: false, error: "Audit not found." };
+    }
+    
+    return { success: true, data: audit };
+
+  } catch (error) {
+    return { success: false, error: getErrorMessage(error) };
+  }
+}
+
+/**
+ * Admin: Get all Audits
+ */
+export async function getAllAuditsForAdminAction() {
+  const headersList = await headers();
+  const session = await auth.api.getSession({ headers: headersList });
+
+  if (!session || (session.user.role !== UserRole.ADMIN && session.user.role !== UserRole.SUPER_ADMIN)) {
+    return { success: false, error: "Forbidden" as const };
+  }
+
+  try {
+    const audits = await prisma.audit.findMany({
+      orderBy: { auditDate: 'desc' },
+      include: {
+        agency: { select: { name: true } },
+        firm: { select: { name: true } },
+        _count: { select: { observations: true } },
+        scorecard: { select: { auditScore: true, auditGrade: true } }
+      }
+    });
+    return { success: true, data: audits };
+  } catch (error) {
+    return { success: false, error: getErrorMessage(error) };
+  }
+}

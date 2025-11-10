@@ -84,7 +84,7 @@ export function ShowCauseNoticeClient({ notice, isAgencyView }: ShowCauseNoticeC
   };
 
   const getObservationStatus = (obs: Observation) => {
-    if (obs.penalty) return <Badge className="bg-purple-100 text-purple-800">Penalty Issued</Badge>;
+    if (obs.penaltyId) return <Badge className="bg-purple-100 text-purple-800">Penalty Issued</Badge>;
     switch (obs.status) {
       case "SENT_TO_AGENCY": return <Badge variant="outline">Pending Response</Badge>;
       case "AGENCY_ACCEPTED": return <Badge className="bg-green-100 text-green-800">Accepted</Badge>;
@@ -284,7 +284,7 @@ export function ShowCauseNoticeClient({ notice, isAgencyView }: ShowCauseNoticeC
                           <Button size="sm" variant="destructive" onClick={() => setPenaltyModalObs(obs)}>Assign Penalty</Button>
                         )}
                         {!isAgencyView && obs.status === 'AGENCY_DISPUTED' && !obs.penaltyId && (
-                          <AlertTriangle className="h-5 w-5 text-red-500 ml-auto" title="Disputed by Agency" />
+                          <AlertTriangle className="h-5 w-5 text-red-500 ml-auto" />
                         )}
                       </TableCell>
                     </TableRow>

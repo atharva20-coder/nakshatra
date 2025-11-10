@@ -121,12 +121,11 @@ export async function getShowCauseNoticesForAgencyAction() {
 
 /**
  * Agency/Admin: Get details of one Show Cause Notice
- * THIS ACTION INCLUDES THE FIX FOR ADMIN VISIBILITY
  */
 export async function getShowCauseNoticeDetailsAction(noticeId: string) {
   const headersList = await headers();
   const session = await auth.api.getSession({ headers: headersList });
-  if (!session) return { error: "Unauthorized" };
+  if (!session) return { success: false, error: "Unauthorized" as const };
 
   try {
     const notice = await prisma.showCauseNotice.findFirst({
@@ -134,11 +133,10 @@ export async function getShowCauseNoticeDetailsAction(noticeId: string) {
       include: {
         issuedByAdmin: { select: { name: true } },
         receivedByAgency: { select: { name: true } },
-        observations: { // Get all observations linked to this notice
+        observations: {
           orderBy: { observationNumber: 'asc' },
           include: {
-            penalty: true, // Include penalty if it's been assigned
-            // --- THIS IS THE FIX ---
+            penalty: true,
             audit: {
               include: {
                 firm: {
@@ -153,10 +151,9 @@ export async function getShowCauseNoticeDetailsAction(noticeId: string) {
                 }
               }
             }
-            // --- END OF FIX ---
           }
         },
-        responses: { // Get the general SCN responses
+        responses: {
           include: { author: { select: { name: true } } },
           orderBy: { createdAt: 'asc' }
         }
@@ -164,19 +161,21 @@ export async function getShowCauseNoticeDetailsAction(noticeId: string) {
     });
 
     if (!notice) {
-      return { error: "Notice not found." };
+      return { success: false, error: "Notice not found." };
     }
     
     const isAdmin = session.user.role === UserRole.ADMIN || session.user.role === UserRole.SUPER_ADMIN;
     const isOwner = notice.receivedByAgencyId === session.user.id;
     
     if (!isAdmin && !isOwner) {
-      return { error: "Forbidden: You do not have permission to view this notice." };
+      return { success: false, error: "Forbidden: You do not have permission to view this notice." };
     }
 
-    return { success: true, notice, isAdmin };
+    // --- THIS IS THE FIX ---
+    // Return a single `data` object
+    return { success: true, data: { notice, isAdmin } };
   } catch (error) {
-    return { error: getErrorMessage(error) };
+    return { success: false, error: getErrorMessage(error) };
   }
 }
 
