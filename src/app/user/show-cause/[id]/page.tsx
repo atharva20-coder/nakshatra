@@ -7,9 +7,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { ShowCauseNoticeClient } from "@/components/show-cause-notice-client";
 
-// ✅ params should be a plain object, not a Promise
+// Align with Next.js generated types: params is a Promise
 interface PageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 // --- Extract the successful return type from the action ---
@@ -20,7 +20,7 @@ type SuccessData = Extract<ShowCauseDetailsReturn, { success: true }>["data"];
 type NoticeType = SuccessData["notice"];
 
 export default async function ShowCauseNoticePage({ params }: PageProps) {
-  const { id } = params; // ✅ do not await params
+  const { id } = await params;
   const headersList = await headers();
   const session = await auth.api.getSession({ headers: headersList });
 
