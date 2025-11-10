@@ -60,3 +60,4 @@ export async function setUserActivationStatusAction(userId: string, isBanned: bo
     return { error: "An unknown error occurred." };
   }
 }
+
