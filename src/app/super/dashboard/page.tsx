@@ -7,9 +7,10 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button"; // ✅ Added missing Button import
+import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Users, ShieldCheck, UserCheck, Settings, LinkIcon } from "lucide-react";
+import { DeactivateUserToggle } from "@/components/deactivate-user-toggle";
+import { UserCheck, Settings, LinkIcon, FileText, Building, FileCheck2, ListChecks, Megaphone } from "lucide-react"; // Added ListChecks
 
 export default async function Page() {
   const headersList = await headers();
@@ -50,11 +51,6 @@ export default async function Page() {
     return 0;
   });
 
-  // Calculate user statistics
-  const totalUsers = users.length;
-  const adminCount = users.filter(user => user.role === "ADMIN" || user.role === "SUPER_ADMIN").length;
-  const standardUserCount = totalUsers - adminCount;
-
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
       <div className="px-8 py-12 container mx-auto max-w-screen-xl">
@@ -71,8 +67,27 @@ export default async function Page() {
           <ReturnButton href="/profile" label="Back to Profile" />
         </div>
 
-        {/* --- AUDIT MANAGEMENT CARD --- */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {/* --- MANAGEMENT CARDS --- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Auditing Firms</CardTitle>
+              <Building className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">Manage Firms</div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Register and manage auditing firms.
+              </p>
+              <Button size="sm" asChild>
+                <Link href="/super/auditing-firms">
+                  <LinkIcon className="mr-2 h-4 w-4" /> Manage Firms
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Audit Management</CardTitle>
@@ -84,15 +99,89 @@ export default async function Page() {
                 Assign agencies to specific auditing firms.
               </p>
               <Button size="sm" asChild>
-                <Link href="/super/audits">
+                <Link href="/super/auditing-firms/audits">
                   <LinkIcon className="mr-2 h-4 w-4" /> Go to Assignments
                 </Link>
               </Button>
             </CardContent>
           </Card>
-          {/* (Optional: add more cards here later) */}
+
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">CM Assignment</CardTitle>
+              <UserCheck className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">Assign Agencies</div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Assign agencies to specific Collection Managers.
+              </p>
+              <Button size="sm" asChild>
+                <Link href="/super/cm-assignments">
+                  <LinkIcon className="mr-2 h-4 w-4" /> Go to Assignments
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Assignment Reports</CardTitle>
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">View Reports</div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Monthly reports of all agency assignments.
+              </p>
+              <Button size="sm" asChild>
+                <Link href="/super/reports">
+                  <LinkIcon className="mr-2 h-4 w-4" /> View Reports
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+          
+          {/* --- NEW CARD --- */}
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Compliance Parameters</CardTitle>
+              <ListChecks className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">Manage Form</div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Edit the &quot;Monthly Compliance&quot; form parameters.
+              </p>
+              <Button size="sm" asChild>
+                <Link href="/super/compliance-parameters">
+                  <LinkIcon className="mr-2 h-4 w-4" /> Manage Parameters
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+          
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Announcements</CardTitle>
+              <Megaphone className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">Manage Announcements</div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Create advisories for Admins, Agencies, Auditors & Collection Managers
+              </p>
+              <Button size="sm" asChild>
+                <Link href="/super/announcements">
+                  <LinkIcon className="mr-2 h-4 w-4" /> Manage Announcements
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+          {/* --- END NEW CARD --- */}
         </div>
-        {/* --- END AUDIT MANAGEMENT CARD --- */}
+        {/* --- END MANAGEMENT CARDS --- */}
+
 
         {/* --- USER MANAGEMENT TABLE --- */}
         <div id="user-table">
@@ -128,10 +217,13 @@ export default async function Page() {
                           <UserRoleSelect userId={user.id} role={user.role as UserRole} />
                         </td>
                         <td className="px-4 py-3 text-center">
-                          {user.role === "USER" ? (
-                            <DeleteUserButton userId={user.id} />
+                          {user.role !== "SUPER_ADMIN" ? (
+                            <DeactivateUserToggle 
+                              userId={user.id} 
+                              isBanned={user.banned ?? false} 
+                            />
                           ) : (
-                            <PlaceholderDeleteUserButton />
+                            <span className="text-xs text-gray-500">N/A</span>
                           )}
                         </td>
                       </tr>

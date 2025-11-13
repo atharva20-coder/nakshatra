@@ -43,7 +43,7 @@ useEffect(() => {
         console.error("Error fetching history:", result.error);
         setSubmissions([]);
       } else {
-        setSubmissions(result.submissions || []);
+        setSubmissions((result.submissions as HistorySubmission[]) || []);
       }
       
       setIsLoading(false);

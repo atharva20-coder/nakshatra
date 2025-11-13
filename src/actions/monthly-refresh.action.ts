@@ -2,182 +2,368 @@
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { SubmissionStatus } from "@/generated/prisma";
+import { SubmissionStatus, ActivityAction, NotificationType, User } from "@/generated/prisma";
 import { headers } from "next/headers";
 import { FORM_CONFIGS, FormType } from "@/types/forms";
+import { createNotificationAction } from "@/actions/notification.action";
+import { logFormActivityAction } from "@/actions/activity-logging.action";
+
+// --------------------------------------
+// Prisma Model Delegate Mapping
+// --------------------------------------
+
+const prismaModelMap: Record<FormType, keyof typeof prisma> = {
+  codeOfConduct: "codeOfConduct",
+  declarationCumUndertaking: "declarationCumUndertaking",
+  agencyVisits: "agencyVisit",
+  monthlyCompliance: "monthlyCompliance",
+  assetManagement: "assetManagement",
+  telephoneDeclaration: "telephoneDeclaration",
+  manpowerRegister: "agencyManpowerRegister",
+  productDeclaration: "productDeclaration",
+  penaltyMatrix: "agencyPenaltyMatrix",
+  trainingTracker: "agencyTrainingTracker",
+  proactiveEscalation: "proactiveEscalationTracker",
+  escalationDetails: "escalationDetails",
+  paymentRegister: "paymentRegister",
+  repoKitTracker: "repoKitTracker",
+  noDuesDeclaration:'noDuesDeclaration',
+};
+
+/** Safely get a typed Prisma delegate for a given FormType */
+function getPrismaDelegate<T extends FormType>(formType: T) {
+  const modelName = prismaModelMap[formType];
+  return prisma[modelName as keyof typeof prisma] as {
+    findFirst: (args: unknown) => Promise<{
+      id: string;
+      createdAt: Date;
+      updatedAt: Date;
+      status: SubmissionStatus;
+    } | null>;
+    findMany: (args: unknown) => Promise<unknown[]>;
+  };
+}
+
+// --------------------------------------
+// Interfaces and Helpers
+// --------------------------------------
+
+interface FormStatus {
+  formType: FormType;
+  lastSubmission: Date | null;
+  status: SubmissionStatus | null;
+  isOverdue: boolean;
+  needsRefresh: boolean;
+  validityPeriod: { start: Date; end: Date };
+}
 
 /**
- * Checks if a user needs form refresh and creates new submission tracking
- * Called on dashboard load and scheduled via cron job
+ * Calculate the validity period for a form based on creation date
  */
-export async function checkAndRefreshFormsAction(userId?: string) {
+function getFormValidityPeriod(
+  createdAt: Date,
+  category: "monthly" | "annual",
+  deadlineDay: number
+): { start: Date; end: Date } {
+  const createMonth = createdAt.getMonth(); // 0-11
+  const createYear = createdAt.getFullYear();
+
+  if (category === "annual") {
+    const fyStartMonth = 3; // April
+    const fyYear = createMonth >= fyStartMonth ? createYear : createYear - 1;
+
+    return {
+      start: new Date(fyYear, fyStartMonth, 1),
+      end: new Date(fyYear + 1, fyStartMonth, deadlineDay, 23, 59, 59),
+    };
+  }
+
+  // Monthly forms
+  const nextMonth = createMonth + 1;
+  const nextMonthYear = nextMonth > 11 ? createYear + 1 : createYear;
+  const adjustedMonth = nextMonth > 11 ? 0 : nextMonth;
+
+  return {
+    start: new Date(createYear, createMonth, 1),
+    end: new Date(nextMonthYear, adjustedMonth, deadlineDay, 23, 59, 59),
+  };
+}
+
+/**
+ * Check if a form is overdue
+ */
+function isFormOverdue(
+  status: SubmissionStatus | null,
+  validityEnd: Date,
+  now: Date
+): boolean {
+  if (status === SubmissionStatus.SUBMITTED) return false;
+  return now > validityEnd;
+}
+
+/**
+ * Determine if a form needs refresh
+ */
+async function shouldRefreshForm(
+  userId: string,
+  formType: FormType,
+  config: typeof FORM_CONFIGS[FormType],
+  now: Date
+): Promise<{ shouldRefresh: boolean; reason: string }> {
+  const model = getPrismaDelegate(formType);
+  const userField = formType === "agencyVisits" ? "agencyId" : "userId";
+
+  const latestForm = await model.findFirst({
+    where: { [userField]: userId },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      createdAt: true,
+      status: true,
+      updatedAt: true,
+    },
+  } as object);
+
+  if (!latestForm) {
+    return { shouldRefresh: true, reason: "Initial form creation" };
+  }
+
+  const validity = getFormValidityPeriod(
+    latestForm.createdAt,
+    config.category as "monthly" | "annual",
+    config.deadlineDay
+  );
+
+  if (now <= validity.end) {
+    return { shouldRefresh: false, reason: "Current form still valid" };
+  }
+
+  if (latestForm.status !== SubmissionStatus.SUBMITTED) {
+    return { shouldRefresh: false, reason: "Previous form not submitted - overdue" };
+  }
+
+  if (config.category === "annual") {
+    const currentFY = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    const formFY =
+      latestForm.createdAt.getMonth() >= 3
+        ? latestForm.createdAt.getFullYear()
+        : latestForm.createdAt.getFullYear() - 1;
+
+    if (currentFY > formFY) {
+      return { shouldRefresh: true, reason: "New financial year - refresh needed" };
+    }
+  } else {
+    return { shouldRefresh: true, reason: "New month - refresh needed" };
+  }
+
+  return { shouldRefresh: false, reason: "No refresh needed" };
+}
+
+/**
+ * Get all forms' status for a user
+ */
+export async function getUserFormStatusAction(userId: string) {
+  const now = new Date();
+  const statuses: FormStatus[] = [];
+
+  for (const [formType, config] of Object.entries(FORM_CONFIGS) as [
+    FormType,
+    (typeof FORM_CONFIGS)[FormType]
+  ][]) {
+    const model = getPrismaDelegate(formType);
+    const userField = formType === "agencyVisits" ? "agencyId" : "userId";
+
+    const latestForm = await model.findFirst({
+      where: { [userField]: userId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        createdAt: true,
+        status: true,
+        updatedAt: true,
+      },
+    } as object);
+
+    if (!latestForm) {
+      statuses.push({
+        formType,
+        lastSubmission: null,
+        status: null,
+        isOverdue: false,
+        needsRefresh: true,
+        validityPeriod: {
+          start: now,
+          end: new Date(
+            now.getFullYear(),
+            now.getMonth() + 1,
+            config.deadlineDay,
+            23,
+            59,
+            59
+          ),
+        },
+      });
+      continue;
+    }
+
+    const validity = getFormValidityPeriod(
+      latestForm.createdAt,
+      config.category as "monthly" | "annual",
+      config.deadlineDay
+    );
+    const overdue = isFormOverdue(latestForm.status, validity.end, now);
+    const refreshCheck = await shouldRefreshForm(userId, formType, config, now);
+
+    statuses.push({
+      formType,
+      lastSubmission:
+        latestForm.status === SubmissionStatus.SUBMITTED
+          ? latestForm.updatedAt
+          : null,
+      status: latestForm.status,
+      isOverdue: overdue,
+      needsRefresh: refreshCheck.shouldRefresh,
+      validityPeriod: validity,
+    });
+  }
+
+  return { success: true, statuses };
+}
+
+/**
+ * Mark overdue forms (run via cron)
+ */
+export async function markOverdueFormsAction() {
   const headersList = await headers();
   const session = await auth.api.getSession({ headers: headersList });
-  
-  if (!session) {
+
+  if (session && !["SUPER_ADMIN", "ADMIN"].includes(session.user.role)) {
     return { error: "Unauthorized" };
   }
 
-  const targetUserId = userId || session.user.id;
-  
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: targetUserId },
-      select: { createdAt: true }
-    });
-
-    if (!user) {
-      return { error: "User not found" };
-    }
-
     const now = new Date();
-    const currentMonth = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
-    const currentDay = now.getDate();
-
-    // Check if it's past the 5th of the month
-    if (currentDay < 5) {
-      return { success: true, refreshed: false, message: "Not yet refresh day" };
-    }
-
-    // Get user's registration date
-    const registrationDate = new Date(user.createdAt);
-    const registrationMonth = registrationDate.getMonth() + 1;
-    const registrationYear = registrationDate.getFullYear();
-
-    // Check if user registered this month (don't create overdue forms)
-    const isNewUser = registrationYear === currentYear && registrationMonth === currentMonth;
-
-    // Check for forms that need refresh
-    const formsToCheck = Object.entries(FORM_CONFIGS).filter(([_, config]) => 
-      config.category === 'monthly' || config.category === 'annual'
-    );
-
-    let refreshedCount = 0;
-
-    for (const [formType, config] of formsToCheck) {
-      // Skip if user registered after the form was due
-      if (isNewUser && config.isRequired) {
-        continue;
-      }
-
-      // For annual forms, check if it's April (start of Indian financial year)
-      if (config.category === 'annual' && currentMonth !== 4) {
-        continue;
-      }
-
-      // Get the latest submission for this form
-      const tableName = getTableNameForForm(formType as FormType);
-      const userField = formType === 'agencyVisits' ? 'agencyId' : 'userId';
-      
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const latestSubmission = await (prisma as any)[tableName].findFirst({
-        where: { [userField]: targetUserId },
-        orderBy: { updatedAt: 'desc' }
+    const users: Pick<User, "id" | "name" | "email" | "createdAt">[] =
+      await prisma.user.findMany({
+        where: { role: "USER" },
+        select: { id: true, name: true, email: true, createdAt: true },
       });
 
-      // Check if last submission was in previous month/year
-      if (latestSubmission) {
-        const lastUpdate = new Date(latestSubmission.updatedAt);
-        const lastMonth = lastUpdate.getMonth() + 1;
-        const lastYear = lastUpdate.getFullYear();
+    let totalOverdue = 0;
+    const overdueDetails: Array<{ userId: string; formType: string; userName: string }> = [];
 
-        // For monthly forms
-        if (config.category === 'monthly') {
-          // If last update was this month, no need to refresh
-          if (lastMonth === currentMonth && lastYear === currentYear) {
-            continue;
-          }
+    for (const user of users) {
+      for (const [formType, config] of Object.entries(FORM_CONFIGS) as [
+        FormType,
+        (typeof FORM_CONFIGS)[FormType]
+      ][]) {
+        if (!config.isRequired) continue;
 
-          // If form is not submitted, don't create new entry
-          if (latestSubmission.status !== SubmissionStatus.SUBMITTED) {
-            continue;
-          }
-        }
+        const model = getPrismaDelegate(formType);
+        const userField = formType === "agencyVisits" ? "agencyId" : "userId";
 
-        // For annual forms
-        if (config.category === 'annual') {
-          // Check if last update was this financial year
-          const lastFinancialYear = lastMonth >= 4 ? lastYear : lastYear - 1;
-          const currentFinancialYear = currentMonth >= 4 ? currentYear : currentYear - 1;
-          
-          if (lastFinancialYear === currentFinancialYear) {
-            continue;
-          }
+        const latestForm = await model.findFirst({
+          where: { [userField]: user.id },
+          orderBy: { createdAt: "desc" },
+        } as object);
 
-          // If form is not submitted, don't create new entry
-          if (latestSubmission.status !== SubmissionStatus.SUBMITTED) {
-            continue;
+        const validity =
+          latestForm &&
+          getFormValidityPeriod(
+            latestForm.createdAt,
+            config.category as "monthly" | "annual",
+            config.deadlineDay
+          );
+
+        const isOverdueNow =
+          !latestForm ||
+          isFormOverdue(latestForm.status, validity!.end, now);
+
+        if (isOverdueNow) {
+          totalOverdue++;
+          overdueDetails.push({ userId: user.id, formType, userName: user.name });
+
+          await createNotificationAction(
+            user.id,
+            NotificationType.SYSTEM_ALERT,
+            "Form Overdue",
+            `Your ${config.title} form is overdue. Please submit it as soon as possible.`,
+            `/user/forms/${formType}`,
+            latestForm?.id,
+            "form"
+          );
+
+          if (latestForm) {
+            await logFormActivityAction({
+              action: ActivityAction.FORM_CREATED,
+              entityType: formType,
+              description: `Form marked as overdue`,
+              entityId: latestForm.id,
+              metadata: {
+                status: "OVERDUE",
+                validityEnd: validity!.end.toISOString(),
+                currentStatus: latestForm.status,
+              },
+            });
           }
         }
       }
-
-      // Create new draft entry for the form
-      // Note: Actual implementation would create empty form entries
-      // This is a placeholder for the logic
-      refreshedCount++;
     }
 
-    return { 
-      success: true, 
-      refreshed: refreshedCount > 0, 
-      count: refreshedCount 
-    };
+    return { success: true, totalOverdue, overdueDetails };
   } catch (error) {
-    console.error("Error refreshing forms:", error);
-    return { error: "Failed to refresh forms" };
+    console.error("Error marking overdue forms:", error);
+    return { error: "Failed to mark overdue forms" };
   }
 }
 
 /**
- * Helper to get Prisma table name for form type
+ * Manual form refresh
  */
-function getTableNameForForm(formType: FormType): string {
-  const mapping: Record<FormType, string> = {
-    codeOfConduct: 'codeOfConduct',
-    declarationCumUndertaking: 'declarationCumUndertaking',
-    agencyVisits: 'agencyVisit',
-    monthlyCompliance: 'monthlyCompliance',
-    assetManagement: 'assetManagement',
-    telephoneDeclaration: 'telephoneDeclaration',
-    manpowerRegister: 'agencyManpowerRegister',
-    productDeclaration: 'productDeclaration',
-    penaltyMatrix: 'agencyPenaltyMatrix',
-    trainingTracker: 'agencyTrainingTracker',
-    proactiveEscalation: 'proactiveEscalationTracker',
-    escalationDetails: 'escalationDetails',
-    paymentRegister: 'paymentRegister',
-    repoKitTracker: 'repoKitTracker'
+export async function triggerFormRefreshAction(userId?: string) {
+  const headersList = await headers();
+  const session = await auth.api.getSession({ headers: headersList });
+
+  if (!session) return { error: "Unauthorized" };
+
+  const targetUserId = userId || session.user.id;
+
+  if (
+    targetUserId !== session.user.id &&
+    !["ADMIN", "SUPER_ADMIN"].includes(session.user.role)
+  ) {
+    return { error: "Forbidden" };
+  }
+
+  const statusResult = await getUserFormStatusAction(targetUserId);
+  if (!statusResult.success) return { error: "Failed to get form status" };
+
+  return {
+    success: true,
+    statuses: statusResult.statuses,
+    message: "Form status refreshed successfully",
   };
-  
-  return mapping[formType];
 }
 
 /**
- * Get form submission history for a user
+ * Fetch submission history
  */
 export async function getFormHistoryAction(userId: string, formType: FormType) {
   const headersList = await headers();
   const session = await auth.api.getSession({ headers: headersList });
-  
-  if (!session) {
-    return { error: "Unauthorized" };
-  }
+
+  if (!session) return { error: "Unauthorized" };
 
   try {
-    const tableName = getTableNameForForm(formType);
-    const userField = formType === 'agencyVisits' ? 'agencyId' : 'userId';
+    const model = getPrismaDelegate(formType);
+    const userField = formType === "agencyVisits" ? "agencyId" : "userId";
     const includeField = getIncludeFieldForForm(formType);
-    
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const submissions = await (prisma as any)[tableName].findMany({
-      where: { 
-        [userField]: userId,
-        status: SubmissionStatus.SUBMITTED 
-      },
-      orderBy: { createdAt: 'desc' },
-      include: includeField ? { [includeField]: true } : {}
-    });
+
+    const submissions = await model.findMany({
+      where: { [userField]: userId, status: SubmissionStatus.SUBMITTED },
+      orderBy: { createdAt: "desc" },
+      include: includeField ? { [includeField]: true } : {},
+    } as object);
 
     return { success: true, submissions };
   } catch (error) {
@@ -187,25 +373,11 @@ export async function getFormHistoryAction(userId: string, formType: FormType) {
 }
 
 /**
- * Helper to get the correct include field name for each form type
+ * Return include field mapping
  */
 function getIncludeFieldForForm(formType: FormType): string | null {
-  const includeMapping: Record<FormType, string | null> = {
-    codeOfConduct: 'details',
-    declarationCumUndertaking: 'collectionManagers',
-    agencyVisits: 'details',
-    monthlyCompliance: 'details',
-    assetManagement: 'details',
-    telephoneDeclaration: 'details',
-    manpowerRegister: 'details',
-    productDeclaration: 'details',
-    penaltyMatrix: 'details',
-    trainingTracker: 'details',
-    proactiveEscalation: 'details',
-    escalationDetails: 'details',
-    paymentRegister: 'details',
-    repoKitTracker: 'details'
+  const includeMapping: Partial<Record<FormType, string>> = {
+    declarationCumUndertaking: "collectionManagers",
   };
-  
-  return includeMapping[formType];
+  return includeMapping[formType] ?? "details";
 }

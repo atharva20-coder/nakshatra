@@ -1,0 +1,23 @@
+name: Daily Cron (Mark Overdue)
+
+on:
+  schedule:
+    # Runs at 19:30 UTC (which is 1:00 AM IST)
+    - cron: '30 19 * * *'
+  workflow_dispatch: # Allows manual triggering from GitHub UI
+
+jobs:
+  mark-overdue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Mask Overdue API
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" -X POST ${{ secrets.APP_URL }}/api/cron/mask-overdue \
+          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          
+          if [ "$response" -ne 200 ]; then
+            echo "API call failed with status code: $response"
+            exit 1
+          else
+            echo "Success! Status code: $response"
+          fi

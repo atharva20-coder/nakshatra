@@ -1,3 +1,5 @@
+import { Award, Trash2 } from "lucide-react";
+
 // src/types/forms.ts
 export interface BaseFormRow {
   id: number | string; // Changed to allow string IDs from DB and number for new rows
@@ -300,7 +302,17 @@ export const FORM_CONFIGS = {
     category: 'monthly',
     isRequired: false,
     deadlineDay: 5
-  }
+  },
+ noDuesDeclaration: {
+    id: "noDuesDeclaration", // <-- FIX: Added ID
+    title: "No Dues & Data Purging Declaration",
+    description: "Monthly declaration of no dues and data purging activities.",
+    icon: Trash2,
+    category: "monthly", // <-- FIX: Added Category
+    isRequired: true,
+    deadlineDay: 5,
+  },
+  
 } as const;
 
 export type FormType = keyof typeof FORM_CONFIGS;

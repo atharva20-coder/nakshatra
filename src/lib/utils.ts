@@ -22,3 +22,17 @@ export function normalizeName(name: string) {
     .replace(/[^a-zA-Z\s'-]/g, "")
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
+
+// --- ADDED MISSING FUNCTION ---
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  if (typeof error === 'object' && error !== null && 'message' in error && typeof (error as { message: unknown }).message === 'string') {
+    return (error as { message: string }).message;
+  }
+  return "An unknown error occurred.";
+}

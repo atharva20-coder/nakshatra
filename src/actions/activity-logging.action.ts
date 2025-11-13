@@ -119,6 +119,7 @@ async function getEntityCreationDate(entityType: string, entityId: string) {
     escalationDetails: prisma.escalationDetails,
     paymentRegister: prisma.paymentRegister,
     repoKitTracker: prisma.repoKitTracker,
+    noDuesDeclaration: prisma.noDuesDeclaration, // <-- ADD THIS
   };
 
   const model = modelMap[entityType];

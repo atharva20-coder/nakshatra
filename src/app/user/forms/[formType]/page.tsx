@@ -5,7 +5,6 @@ import { CodeOfConductForm } from "@/components/forms/CodeOfConductForm";
 import { DeclarationCumUndertakingForm } from "@/components/forms/DeclarationCumUndertakingForm";
 import { EscalationDetailsForm } from "@/components/forms/EscalationDetailsForm";
 import { ManpowerRegisterForm } from "@/components/forms/ManpowerRegisterForm";
-//import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm";
 import { PaymentRegisterForm } from "@/components/forms/PaymentRegisterForm";
 import { PenaltyMatrixForm } from "@/components/forms/PenaltyMatrixForm";
 import { ProactiveEscalationForm } from "@/components/forms/ProactiveEscalationForm";
@@ -17,6 +16,8 @@ import { FORM_CONFIGS, FormType } from "@/types/forms";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm";
+import { NoDuesDeclarationForm } from "@/components/forms/NoDuesDeclarationForm";
 
 interface NewFormPageProps {
     params: Promise<{
@@ -32,9 +33,9 @@ const renderForm = async (formType: FormType) => {
             return <CodeOfConductForm />;
         case 'declarationCumUndertaking':
             return <DeclarationCumUndertakingForm />;
-//        case 'monthlyCompliance': {
-//            return <MonthlyComplianceForm />;
-//        }
+        case 'monthlyCompliance': {
+            return <MonthlyComplianceForm />;
+        }
         case 'assetManagement':
             return <AssetManagementForm />;
         case 'telephoneDeclaration':
@@ -55,6 +56,8 @@ const renderForm = async (formType: FormType) => {
             return <PaymentRegisterForm />;
         case 'repoKitTracker':
             return <RepoKitTrackerForm />;
+        case 'noDuesDeclaration':
+            return <NoDuesDeclarationForm />;
         default:
             notFound();
     }

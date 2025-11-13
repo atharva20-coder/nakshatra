@@ -3,11 +3,12 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
-import { UserRole, AuditStatus, ObservationStatus, ObservationSeverity, PenaltyStatus, ActivityAction, NotificationType } from "@/generated/prisma";
+import { UserRole, AuditStatus, ObservationStatus, ObservationSeverity, PenaltyStatus, ActivityAction, NotificationType, ShowCauseStatus } from "@/generated/prisma";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createNotificationAction } from "@/actions/notification.action";
 import { logFormActivityAction } from "@/actions/activity-logging.action";
+import { getErrorMessage } from "@/lib/utils";
 
 /**
  * Super Admin: Get a summary of all auditing firms and their stats.
@@ -458,76 +459,67 @@ export async function addObservationAction(data: {
 }
 
 
+
 /**
  * Admin/Super Admin: Send observation to agency and set deadline
  */
 export async function sendObservationToAgencyAction(
   observationId: string,
-  responseDeadlineDays: number
+  deadline: Date
 ) {
+  console.warn("DEPRECATED: sendObservationToAgencyAction was called. Use issueShowCauseNoticeAction instead.");
   const headersList = await headers();
   const session = await auth.api.getSession({ headers: headersList });
 
-  // Explicit check for ADMIN or SUPER_ADMIN roles
   if (!session || (session.user.role !== UserRole.ADMIN && session.user.role !== UserRole.SUPER_ADMIN)) {
-    return { error: "Forbidden: Only admins or super admins can send observations" };
+    return { error: "Unauthorized" };
   }
 
   try {
-    const deadline = new Date();
-    deadline.setDate(deadline.getDate() + responseDeadlineDays);
-    deadline.setHours(23, 59, 59, 999);
-
     const observation = await prisma.observation.update({
       where: { id: observationId },
       data: {
         visibleToAgency: true,
         sentToAgencyAt: new Date(),
         sentBy: session.user.id,
-        status: ObservationStatus.SENT_TO_AGENCY,
+        status: ObservationStatus.AWAITING_AGENCY_RESPONSE,
         responseDeadline: deadline,
       },
       include: {
-        audit: {
-          include: {
-            agency: { select: { id: true, name: true } },
-          },
-        },
+        audit: true,
       },
     });
 
-     await logFormActivityAction({
-        action: ActivityAction.OBSERVATION_SENT_TO_AGENCY,
-        entityType: 'observation',
-        description: `Sent observation ${observation.observationNumber} to agency ${observation.audit.agency.name}`,
-        entityId: observation.id,
-        metadata: { auditId: observation.auditId, responseDeadline: deadline.toISOString() }
+    await logFormActivityAction({
+      action: ActivityAction.OBSERVATION_SENT_TO_AGENCY,
+      entityType: 'observation',
+      description: `Observation ${observation.observationNumber} sent to agency`,
+      entityId: observation.id,
+      metadata: { auditId: observation.auditId, deadline },
     });
 
     await createNotificationAction(
       observation.audit.agencyId,
       NotificationType.SYSTEM_ALERT,
-      "New Audit Observation Received",
-      `Please review observation ${observation.observationNumber}. Respond by ${deadline.toLocaleDateString()}.`,
-      `/user/observations/${observationId}`
+      "New Observation Received",
+      `You have received a new observation (${observation.observationNumber}). Please respond by ${deadline.toLocaleDateString()}.`,
+      `/user/observations/${observation.id}`
     );
 
     revalidatePath("/admin/observations");
     revalidatePath(`/admin/observations/${observationId}`);
-    revalidatePath(`/user/observations`);
+    revalidatePath("/user/observations");
 
     return { success: true, observation };
-  } catch (error: unknown) { // Use unknown
-    console.error("Error sending observation to agency:", error);
-     if (error instanceof Error) {
-        return { error: `Failed to send observation: ${error.message}` };
-    }
-    return { error: "Failed to send observation to agency due to an unknown error." };
+  } catch {
+    return { error: "Failed to send observation" };
   }
 }
 
+
 /**
  * Agency: Respond to an observation
+ * This is Step 3 in the SCN workflow
  */
 export async function respondToObservationAction(
   observationId: string,
@@ -551,17 +543,27 @@ export async function respondToObservationAction(
     if (!observation || observation.audit.agencyId !== session.user.id) {
       return { error: "Observation not found or access denied" };
     }
+    
+    // Can only respond if status is SENT_TO_AGENCY
     if (observation.status !== ObservationStatus.SENT_TO_AGENCY) {
+      if (observation.status === ObservationStatus.AGENCY_ACCEPTED || observation.status === ObservationStatus.AGENCY_DISPUTED) {
+         return { error: "You have already responded to this observation." };
+      }
       return { error: "Observation cannot be responded to at this time." };
     }
+    
     if (observation.responseDeadline && new Date() > observation.responseDeadline) {
-      return { error: "Response deadline has passed. Observation may have been auto-accepted." };
+      return { error: "Response deadline has passed." };
     }
-    if (!accepted && !evidencePath && observation.evidenceRequired) {
-        return { error: "Evidence is required to dispute this observation." };
-    }
-     if (!accepted && !response) {
+
+    // Validation: If denying, require response text
+    if (!accepted && !response?.trim()) {
         return { error: "A response remark is required when disputing an observation." };
+    }
+
+    // Validation: If evidence is required and they're disputing, they must upload
+    if (!accepted && observation.evidenceRequired && !evidencePath) {
+        return { error: "Evidence is required to dispute this observation." };
     }
 
     const newStatus = accepted ? ObservationStatus.AGENCY_ACCEPTED : ObservationStatus.AGENCY_DISPUTED;
@@ -572,20 +574,65 @@ export async function respondToObservationAction(
         agencyAccepted: accepted,
         agencyResponse: accepted ? null : response,
         agencyResponseDate: new Date(),
-        evidenceSubmitted: !accepted && !!evidencePath,
-        evidencePath: accepted ? null : evidencePath,
+        evidenceSubmitted: !!evidencePath,
+        evidencePath: evidencePath || null,
         status: newStatus,
       },
     });
+    
+    // Check if all observations in this SCN are now answered
+    if (updatedObservation.showCauseNoticeId) {
+      const noticeId = updatedObservation.showCauseNoticeId;
+      
+      const pendingObservations = await prisma.observation.count({
+        where: {
+          showCauseNoticeId: noticeId,
+          status: ObservationStatus.SENT_TO_AGENCY
+        }
+      });
+
+      if (pendingObservations === 0) {
+        // All observations are responded to, update the SCN status
+        const notice = await prisma.showCauseNotice.update({
+          where: { id: noticeId },
+          data: { status: ShowCauseStatus.RESPONDED }
+        });
+
+        // Notify admins that the SCN is ready for review (Step 4)
+        const admins = await prisma.user.findMany({
+          where: { role: { in: [UserRole.ADMIN, UserRole.SUPER_ADMIN] } },
+          select: { id: true },
+        });
+        
+        for (const admin of admins) {
+          await createNotificationAction(
+            admin.id,
+            NotificationType.SHOW_CAUSE_RESPONSE_RECEIVED,
+            "Show Cause Notice Responded",
+            `Agency ${session.user.name} has responded to all items in SCN: "${notice.subject}".`,
+            `/admin/show-cause/${noticeId}`,
+            noticeId,
+            "show_cause_notice"
+          );
+        }
+      }
+    }
 
      await logFormActivityAction({
         action: ActivityAction.OBSERVATION_RESPONDED,
         entityType: 'observation',
         description: `Agency responded to observation ${observation.observationNumber}: ${accepted ? 'Accepted' : 'Disputed'}`,
         entityId: observation.id,
-        metadata: { auditId: observation.auditId, accepted, responseProvided: !!response, evidenceSubmitted: !!evidencePath }
+        metadata: { 
+          auditId: observation.auditId, 
+          accepted, 
+          responseProvided: !!response, 
+          evidenceSubmitted: !!evidencePath,
+          evidencePath: evidencePath || undefined
+        }
     });
 
+    // Notify admins (generic notification for individual observation response)
     const admins = await prisma.user.findMany({
       where: { role: { in: [UserRole.ADMIN, UserRole.SUPER_ADMIN] } },
       select: { id: true },
@@ -599,17 +646,21 @@ export async function respondToObservationAction(
         NotificationType.SYSTEM_ALERT,
         notificationTitle,
         notificationMessage,
-        `/admin/observations/${observationId}`
+        `/admin/audits/${observation.auditId}`
       );
     }
 
+    // Revalidate all paths
     revalidatePath("/user/observations");
+    revalidatePath(`/user/show-cause/${updatedObservation.showCauseNoticeId}`);
     revalidatePath(`/user/observations/${observationId}`);
     revalidatePath("/admin/observations");
     revalidatePath(`/admin/observations/${observationId}`);
+    revalidatePath(`/admin/show-cause/${updatedObservation.showCauseNoticeId}`);
+    revalidatePath(`/admin/audits/${observation.auditId}`);
 
     return { success: true, observation: updatedObservation };
-  } catch (error: unknown) { // Use unknown
+  } catch (error: unknown) {
     console.error("Error responding to observation:", error);
      if (error instanceof Error) {
         return { error: `Failed to submit response: ${error.message}` };
@@ -618,8 +669,11 @@ export async function respondToObservationAction(
   }
 }
 
+
+
 /**
- * Admin/Super Admin: Assign penalty to an accepted/auto-accepted observation
+ * Admin/Super Admin: Assign penalty to an accepted/auto-accepted/disputed observation
+ * This is Step 5 in the SCN workflow
  */
 export async function assignPenaltyAction(data: {
   observationId: string;
@@ -631,33 +685,46 @@ export async function assignPenaltyAction(data: {
   const headersList = await headers();
   const session = await auth.api.getSession({ headers: headersList });
 
-  // Explicit check
   if (!session || (session.user.role !== UserRole.ADMIN && session.user.role !== UserRole.SUPER_ADMIN)) {
-    return { error: "Forbidden: Only admins or super admins can assign penalties" };
+    return { error: "Unauthorized" };
   }
 
   try {
     const observation = await prisma.observation.findUnique({
       where: { id: data.observationId },
-      include: { audit: true },
+      include: { 
+        audit: true,
+        showCauseNotice: true // Include SCN to get its ID
+      },
     });
 
     if (!observation) {
       return { error: "Observation not found" };
     }
 
-    // Ensure penalty can be assigned (observation accepted or auto-accepted)
-    // Corrected check:
-    if (observation.status !== ObservationStatus.AGENCY_ACCEPTED && observation.status !== ObservationStatus.AUTO_ACCEPTED) {
-        return { error: "Penalty can only be assigned to accepted or auto-accepted observations." };
+    // Can assign penalty to accepted, disputed, or auto-accepted observations
+    if (observation.status !== ObservationStatus.AGENCY_ACCEPTED && 
+        observation.status !== ObservationStatus.AUTO_ACCEPTED && 
+        observation.status !== ObservationStatus.AGENCY_DISPUTED) {
+      return { error: "Penalty can only be assigned to accepted, auto-accepted, or disputed observations." };
     }
 
-    if (observation.penaltyAssigned) {
-        return { error: "A penalty has already been assigned to this observation." };
+    if (observation.penaltyAssigned || observation.penaltyId) {
+        return { error: "Penalty has already been assigned to this observation" };
     }
 
-    const result = await prisma.$transaction(async (prisma) => {
-        const penalty = await prisma.penalty.create({
+    const result = await prisma.$transaction(async (tx) => {
+        // Generate proper notice reference - CRITICAL: Store full SCN ID
+        let noticeRef: string;
+        if (observation.showCauseNoticeId) {
+          // Use the full SCN ID (UUID) as the reference
+          noticeRef = observation.showCauseNoticeId;
+        } else {
+          // Fallback for observations without SCN (legacy/direct observations)
+          noticeRef = `OBS-${observation.id.slice(0, 8)}`;
+        }
+
+        const penalty = await tx.penalty.create({
             data: {
                 observationId: data.observationId,
                 agencyId: observation.audit.agencyId,
@@ -666,17 +733,19 @@ export async function assignPenaltyAction(data: {
                 deductionMonth: data.deductionMonth,
                 correctiveAction: data.correctiveAction,
                 assignedBy: session.user.id,
-                status: PenaltyStatus.DRAFT,
+                status: PenaltyStatus.SUBMITTED, // Make it immediately visible
                 assignedAt: new Date(),
+                submittedAt: new Date(), // Auto-submit so agency sees it immediately
+                noticeRefNo: noticeRef, // CRITICAL: Full UUID for hyperlink
             },
         });
 
-        const updatedObservation = await prisma.observation.update({
+        const updatedObservation = await tx.observation.update({
             where: { id: data.observationId },
             data: {
                 penaltyAssigned: true,
                 penaltyId: penalty.id,
-                status: ObservationStatus.CLOSED,
+                status: ObservationStatus.CLOSED, // Final status
             },
         });
 
@@ -686,22 +755,37 @@ export async function assignPenaltyAction(data: {
     await logFormActivityAction({
         action: ActivityAction.PENALTY_ASSIGNED,
         entityType: 'penalty',
-        description: `Assigned penalty (ID: ${result.penalty.id}) of ${data.penaltyAmount} for observation ${observation.observationNumber}`,
+        description: `Penalty of ₹${result.penalty.penaltyAmount} assigned to observation ${observation.observationNumber}`,
         entityId: result.penalty.id,
-        metadata: { observationId: data.observationId, amount: data.penaltyAmount, deductionMonth: data.deductionMonth }
+        metadata: { 
+          auditId: observation.auditId, 
+          observationId: observation.id, 
+          amount: data.penaltyAmount,
+          scnId: observation.showCauseNoticeId 
+        },
     });
+    
+    // Notify agency with link to Penalty Matrix
+    await createNotificationAction(
+        observation.audit.agencyId,
+        NotificationType.SYSTEM_ALERT,
+        "Penalty Assigned",
+        `A penalty of ₹${data.penaltyAmount} has been assigned for observation ${observation.observationNumber}. View it in your Penalty Matrix.`,
+        `/user/forms/penaltyMatrix`
+    );
 
+    // Revalidate all relevant paths
     revalidatePath("/admin/observations");
     revalidatePath(`/admin/observations/${data.observationId}`);
     revalidatePath("/admin/penalties");
+    revalidatePath(`/user/forms/penaltyMatrix`);
+    revalidatePath(`/user/show-cause/${result.updatedObservation.showCauseNoticeId}`);
+    revalidatePath(`/admin/show-cause/${result.updatedObservation.showCauseNoticeId}`);
 
     return { success: true, penalty: result.penalty };
-  } catch (error: unknown) { // Use unknown
+  } catch (error: unknown) {
     console.error("Error assigning penalty:", error);
-     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        return { error: "Failed to assign penalty due to a conflict. Please check observation status." };
-    }
-     if (error instanceof Error) {
+    if (error instanceof Error) {
         return { error: `Failed to assign penalty: ${error.message}` };
     }
     return { error: "Failed to assign penalty due to an unknown error." };
@@ -892,6 +976,7 @@ export async function getObservationsForAgencyAction() {
 
 /**
  * Get penalties for the currently logged-in agency (for penalty matrix form)
+ * This is Step 6 in the SCN workflow
  */
 export async function getPenaltiesForAgencyAction() {
   const headersList = await headers();
@@ -917,7 +1002,7 @@ export async function getPenaltiesForAgencyAction() {
             audit: {
               select: {
                   auditDate: true,
-                  auditorName: true, // Select auditor name from Audit
+                  auditorName: true,
                   firm: { select: { name: true } }
               }
             }
@@ -928,7 +1013,7 @@ export async function getPenaltiesForAgencyAction() {
     });
 
     return { success: true, penalties };
-  } catch (error: unknown) { // Use unknown
+  } catch (error: unknown) {
     console.error("Error fetching penalties for agency:", error);
      if (error instanceof Error) {
         return { error: `Failed to fetch penalties: ${error.message}` };
@@ -936,6 +1021,7 @@ export async function getPenaltiesForAgencyAction() {
     return { error: "Failed to fetch penalties due to an unknown error." };
   }
 }
+
 
 /**
  * SYSTEM ACTION: Auto-accept overdue observations
@@ -1057,3 +1143,195 @@ export async function getAuditDetailsAction(auditId: string) {
     }
 }
 
+/**
+ * Admin: Get Audit, Observations, and Scorecard for review/scoring
+ */
+export async function getAuditForAdminAction(auditId: string) {
+  const headersList = await headers();
+  const session = await auth.api.getSession({ headers: headersList });
+  if (!session || (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN")) {
+    return { error: "Forbidden" };
+  }
+
+  try {
+    const audit = await prisma.audit.findUnique({
+      where: { id: auditId },
+      include: {
+        agency: { select: { id: true, name: true, email: true } },
+        firm: { select: { name: true } },
+        observations: { orderBy: { createdAt: 'asc' } },
+        scorecard: true
+      }
+    });
+
+    if (!audit) {
+      return { error: "Audit not found" };
+    }
+    
+    return { success: true, data: audit, audit };
+
+  } catch (error) {
+    return { error: getErrorMessage(error) };
+  }
+}
+
+/**
+ * Admin: Save/Publish an Audit Scorecard
+ */
+export async function saveAuditScorecardAction(data: {
+  auditId: string;
+  auditPeriod: string;
+  auditScore: number;
+  auditGrade: string;
+  auditCategory: string;
+  finalObservation: string;
+  justification: string;
+}) {
+  const headersList = await headers();
+  const session = await auth.api.getSession({ headers: headersList });
+  if (!session || (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN")) {
+    return { error: "Forbidden" };
+  }
+
+  try {
+    // 1. Find the Auditor Profile ID
+    const audit = await prisma.audit.findUnique({
+      where: { id: data.auditId },
+      select: { auditorId: true, agencyId: true, agency: { select: { name: true } } }
+    });
+    
+    if (!audit) {
+      return { error: "Audit not found" };
+    }
+
+    // 2. Upsert the Scorecard
+    const scorecard = await prisma.auditScorecard.upsert({
+      where: { auditId: data.auditId },
+      create: {
+        auditId: data.auditId,
+        auditorProfileId: audit.auditorId, // Link to the Auditor profile
+        auditPeriod: data.auditPeriod,
+        auditScore: data.auditScore,
+        auditGrade: data.auditGrade,
+        auditCategory: data.auditCategory,
+        finalObservation: data.finalObservation,
+        justification: data.justification,
+        signedAt: new Date(),
+      },
+      update: {
+        auditPeriod: data.auditPeriod,
+        auditScore: data.auditScore,
+        auditGrade: data.auditGrade,
+        auditCategory: data.auditCategory,
+        finalObservation: data.finalObservation,
+        justification: data.justification,
+      }
+    });
+
+    // 3. Log this action
+    await logFormActivityAction({
+      action: ActivityAction.PENALTY_SUBMITTED, // Using this as "Admin Review Complete"
+      entityType: 'AuditScorecard',
+      entityId: scorecard.id,
+      description: `Admin published scorecard for audit on ${audit.agency.name}`,
+      metadata: { ...data }
+    });
+
+    // 4. Notify the agency
+    await createNotificationAction(
+      audit.agencyId,
+      NotificationType.SYSTEM_ALERT,
+      "Audit Scorecard Published",
+      `Your audit scorecard for the period ${data.auditPeriod} has been published.`,
+      `/user/audits/${data.auditId}` // Link to the new agency view
+    );
+    
+    revalidatePath(`/admin/audits/${data.auditId}`);
+    revalidatePath(`/user/audits/${data.auditId}`);
+
+    return { success: true, scorecard };
+
+  } catch (error) {
+    return { error: getErrorMessage(error) };
+  }
+}
+
+/**
+ * Admin: Get all details for a single audit (for SCN issuing & Scorecard)
+ * This supports Step 2 in the SCN workflow
+ */
+export async function getAuditDetailsForAdminAction(auditId: string) {
+  const headersList = await headers();
+  const session = await auth.api.getSession({ headers: headersList });
+
+  if (!session || (session.user.role !== UserRole.ADMIN && session.user.role !== UserRole.SUPER_ADMIN)) {
+    return { success: false, error: "Forbidden" as const };
+  }
+
+  try {
+    const audit = await prisma.audit.findUnique({
+      where: { id: auditId },
+      include: {
+        agency: {
+          select: { id: true, name: true }
+        },
+        firm: {
+          select: { name: true }
+        },
+        auditor: {
+          include: {
+            user: {
+              select: { name: true }
+            }
+          }
+        },
+        observations: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            penalty: true,
+            showCauseNotice: {
+              select: { id: true, subject: true }
+            }
+          }
+        },
+        scorecard: true
+      }
+    });
+
+    if (!audit) {
+      return { success: false, error: "Audit not found." };
+    }
+    
+    return { success: true, data: audit };
+
+  } catch (error) {
+    return { success: false, error: getErrorMessage(error) };
+  }
+}
+
+/**
+ * Admin: Get all Audits
+ */
+export async function getAllAuditsForAdminAction() {
+  const headersList = await headers();
+  const session = await auth.api.getSession({ headers: headersList });
+
+  if (!session || (session.user.role !== UserRole.ADMIN && session.user.role !== UserRole.SUPER_ADMIN)) {
+    return { success: false, error: "Forbidden" as const };
+  }
+
+  try {
+    const audits = await prisma.audit.findMany({
+      orderBy: { auditDate: 'desc' },
+      include: {
+        agency: { select: { name: true } },
+        firm: { select: { name: true } },
+        _count: { select: { observations: true } },
+        scorecard: { select: { auditScore: true, auditGrade: true } }
+      }
+    });
+    return { success: true, data: audits };
+  } catch (error) {
+    return { success: false, error: getErrorMessage(error) };
+  }
+}

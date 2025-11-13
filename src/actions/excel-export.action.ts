@@ -109,7 +109,8 @@ function getTableNameForForm(formType: FormType): string {
     proactiveEscalation: 'proactiveEscalationTracker',
     escalationDetails: 'escalationDetails',
     paymentRegister: 'paymentRegister',
-    repoKitTracker: 'repoKitTracker'
+    repoKitTracker: 'repoKitTracker',
+    noDuesDeclaration:'noDuesDeclaration',
   };
   
   return mapping[formType];

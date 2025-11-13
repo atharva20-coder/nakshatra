@@ -337,8 +337,8 @@ export async function getAgencyVisitByIdForAdmin(id: string) {
     const session = await auth.api.getSession({ headers: headersList });
 
     // Admin/Super Admin Check
-    if (!session || (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN")) {
-        console.log(`getAgencyVisitByIdForAdmin: Access denied for user ${session?.user?.id} with role ${session?.user?.role}. Required ADMIN or SUPER_ADMIN.`);
+    if (!session || (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN" && session.user.role !== "COLLECTION_MANAGER"
+    )) {
         return null;
     }
 
@@ -355,11 +355,8 @@ export async function getAgencyVisitByIdForAdmin(id: string) {
         });
 
         if (!form) {
-            console.log(`getAgencyVisitByIdForAdmin: Form ${id} not found.`);
             return null;
         }
-
-        console.log(`getAgencyVisitByIdForAdmin: Form ${id} found. Status: ${form.status}. Agency: ${form.agency?.name}`);
         // Format details consistently
         const formattedDetails = form.details.map(detail => ({
             id: detail.id,

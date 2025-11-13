@@ -1,3 +1,4 @@
+// src/app/user/forms/[formType]/[id]/page.tsx
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/agency-page-header";
 import { AgencyVisitForm } from "@/components/forms/AgencyVisitForm";
@@ -8,7 +9,12 @@ import { ManpowerRegisterForm } from "@/components/forms/ManpowerRegisterForm";
 import { ProductDeclarationForm } from "@/components/forms/ProductDeclarationForm";
 import { ProactiveEscalationForm } from "@/components/forms/ProactiveEscalationForm";
 import { PaymentRegisterForm } from "@/components/forms/PaymentRegisterForm";
-import { CodeOfConductForm } from "@/components/forms/CodeOfConductForm"
+import { CodeOfConductForm } from "@/components/forms/CodeOfConductForm";
+import { EscalationDetailsForm } from "@/components/forms/EscalationDetailsForm"; // Import new form
+import { RepoKitTrackerForm } from "@/components/forms/RepoKitTrackerForm"; // Import RepoKit
+import { MonthlyComplianceForm } from "@/components/forms/MonthlyComplianceForm";
+import { NoDuesDeclarationForm } from "@/components/forms/NoDuesDeclarationForm";
+
 import { getCodeOfConductById } from "@/actions/code-of-conduct.action";
 import { getAgencyVisitById } from "@/actions/agency-visit.action";
 import { getAssetManagementById } from "@/actions/asset-management.action";
@@ -18,7 +24,10 @@ import { getManpowerRegisterById } from "@/actions/manpower-register.action";
 import { getProductDeclarationById } from "@/actions/product-declaration.action";
 import { getProactiveEscalationById } from "@/actions/proactive-escalation.action";
 import { getPaymentRegisterById } from "@/actions/payment-register.action";
-
+import { getEscalationDetailsById } from "@/actions/escalation-details.action"; // Import new action
+import { getRepoKitTrackerById } from "@/actions/repo-kit-tracker.action"; // Import RepoKit action
+import { getMonthlyComplianceById } from "@/actions/monthly-compliance.action"; // <-- ADD IMPORT
+import { getNoDuesDeclarationById } from "@/actions/no-dues-declaration.action";
 import { FORM_CONFIGS } from "@/types/forms";
 
 type FormType = keyof typeof FORM_CONFIGS;
@@ -47,6 +56,13 @@ const renderForm = async (formType: FormType, id: string) => {
             if (!submission) notFound();
             return <DeclarationCumUndertakingForm initialData={submission} />;
         }
+        // --- ADD NEW CASE ---
+        case 'monthlyCompliance': {
+            const submission = await getMonthlyComplianceById(id);
+            if (!submission) notFound();
+            return <MonthlyComplianceForm initialData={submission} />;
+        }
+        // --- END NEW CASE ---
         case 'assetManagement': {
             const submission = await getAssetManagementById(id);
             if (!submission) notFound();
@@ -76,6 +92,21 @@ const renderForm = async (formType: FormType, id: string) => {
             const submission = await getPaymentRegisterById(id);
             if (!submission) notFound();
             return <PaymentRegisterForm initialData={submission} />;
+        }
+        case 'repoKitTracker': { // Add RepoKit case
+            const submission = await getRepoKitTrackerById(id);
+            if (!submission) notFound();
+            return <RepoKitTrackerForm initialData={submission} />;
+        }
+        case 'escalationDetails': { // Add new case
+            const submission = await getEscalationDetailsById(id);
+            if (!submission) notFound();
+            return <EscalationDetailsForm initialData={submission} />;
+        }
+        case 'noDuesDeclaration': {
+            const submission = await getNoDuesDeclarationById(id);
+            if (!submission) notFound();
+            return <NoDuesDeclarationForm initialData={submission} />;
         }
         // Add other forms as needed
         default:

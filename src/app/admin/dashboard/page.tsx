@@ -6,8 +6,9 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, FileText } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Users, FileText, FileCheck2, BarChart2, ShieldAlert, Megaphone, GraduationCap } from "lucide-react";
+import { AdvisoryMarquee } from "@/components/AdvisoryMarquee";
 
 export default async function Page() {
   const headersList = await headers();
@@ -49,7 +50,9 @@ export default async function Page() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="px-8 py-12 container mx-auto max-w-screen-xl">
+        
         <div className="flex justify-between items-center mb-8">
+          <AdvisoryMarquee />
           <div>
             <h1 className="text-4xl font-bold text-gray-800">Admin Dashboard</h1>
             <p className="text-lg text-gray-500">Welcome, {session.user.name}.</p>
@@ -57,19 +60,48 @@ export default async function Page() {
           <ReturnButton href="/profile" label="Back to Profile" />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+        {/* Management Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-8">
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Request/Approval Management</CardTitle>
               <FileText className="h-6 w-6 text-gray-400" />
             </CardHeader>
             <CardContent>
-              <p className="text-gray-600 mb-4">View and manage all approvals</p>
+              <p className="text-gray-600 mb-4">View and manage form edit approvals</p>
               <Link href="/admin/approvals" className="text-rose-600 font-semibold hover:underline">
                 Go to requests page
               </Link>
             </CardContent>
           </Card>
+          
+          <Card className="hover:shadow-lg transition-shadow border-2 border-transparent hover:border-blue-500">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Audit Review Queue, Show Cause Notice, & Score Card</CardTitle>
+              <FileCheck2 className="h-6 w-6 text-blue-500" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 mb-4">Review completed audits and issue show cause notices.</p>
+              <Link href="/admin/audits" className="text-blue-600 font-semibold hover:underline">
+                Go to review queue
+              </Link>
+            </CardContent>
+          </Card>
+
+
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Reports</CardTitle>
+              <BarChart2 className="h-6 w-6 text-gray-400" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 mb-4">View monthly assignment and audit reports.</p>
+              <Link href="/admin/reports" className="text-rose-600 font-semibold hover:underline">
+                Go to reports
+              </Link>
+            </CardContent>
+          </Card>
+
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Agency Activities</CardTitle>
@@ -88,6 +120,7 @@ export default async function Page() {
           <Card>
             <CardHeader>
               <CardTitle>All Users</CardTitle>
+              <CardDescription>Manage user roles and permissions</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="w-full overflow-x-auto">
