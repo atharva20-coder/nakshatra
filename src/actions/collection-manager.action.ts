@@ -526,8 +526,17 @@ export async function getAssignedAgenciesForCMAction() {
   }
 
   try {
-    const cmProfile = await getOrCreateCMProfile(session.user.id);
+    // Get or create CM profile
+    const cmProfile = await prisma.collectionManagerProfile.findUnique({
+      where: { userId: session.user.id }
+    });
 
+    if (!cmProfile) {
+      // No profile found - should not expose this info
+      return { success: true, agencies: [] };
+    }
+
+    // Fetch assignments with proper error handling
     const assignments = await prisma.cMAgencyAssignment.findMany({
       where: {
         cmProfileId: cmProfile.id,
@@ -535,10 +544,10 @@ export async function getAssignedAgenciesForCMAction() {
       select: {
         id: true,
         assignedAt: true,
-        viewedByAt: true, 
-        isActive: true, 
-        updatedAt: true, 
-        agency: { 
+        viewedByAt: true,
+        isActive: true,
+        updatedAt: true,
+        agency: {
           select: {
             id: true,
             name: true,
@@ -548,15 +557,21 @@ export async function getAssignedAgenciesForCMAction() {
         }
       },
       orderBy: {
-        agency: { name: 'asc' }
+        assignedAt: 'desc'
       }
     });
 
-    const agenciesWithStats = await Promise.all(
-      assignments.map(async (assignment) => {
-        const { agency } = assignment;
+    if (assignments.length === 0) {
+      return { success: true, agencies: [] };
+    }
 
-        const submissionCounts = await Promise.all([
+    // Process each agency with stats - using Promise.allSettled for error resilience
+    const agenciesWithStatsPromises = assignments.map(async (assignment) => {
+      const { agency } = assignment;
+
+      try {
+        // Use Promise.allSettled to prevent one failing query from breaking everything
+        const submissionResults = await Promise.allSettled([
           prisma.codeOfConduct.count({ where: { userId: agency.id, status: 'SUBMITTED' } }),
           prisma.declarationCumUndertaking.count({ where: { userId: agency.id, status: 'SUBMITTED' } }),
           prisma.agencyVisit.count({ where: { agencyId: agency.id, status: 'SUBMITTED' } }),
@@ -572,25 +587,59 @@ export async function getAssignedAgenciesForCMAction() {
           prisma.paymentRegister.count({ where: { userId: agency.id, status: 'SUBMITTED' } }),
           prisma.repoKitTracker.count({ where: { userId: agency.id, status: 'SUBMITTED' } }),
         ]);
-        const totalSubmissions = submissionCounts.reduce((sum, count) => sum + count, 0);
-        
-        const recentForms = await Promise.all([
-          prisma.codeOfConduct.findFirst({ where: { userId: agency.id, status: 'SUBMITTED' }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
-          prisma.declarationCumUndertaking.findFirst({ where: { userId: agency.id, status: 'SUBMITTED' }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
-          prisma.agencyVisit.findFirst({ where: { agencyId: agency.id, status: 'SUBMITTED' }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
-          prisma.monthlyCompliance.findFirst({ where: { agencyId: agency.id, status: 'SUBMITTED' }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
-        ]);
-        
-        const lastSubmissionDate = recentForms
-          .filter((f): f is { updatedAt: Date } => f !== null)
-          .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0]?.updatedAt || null;
 
-        const pendingForms = await Promise.all([
+        // Extract counts, defaulting to 0 if any query failed
+        const submissionCounts = submissionResults.map(result => 
+          result.status === 'fulfilled' ? result.value : 0
+        );
+        const totalSubmissions = submissionCounts.reduce((sum, count) => sum + count, 0);
+
+        // Fetch recent forms with error handling
+        const recentFormsResults = await Promise.allSettled([
+          prisma.codeOfConduct.findFirst({ 
+            where: { userId: agency.id, status: 'SUBMITTED' }, 
+            orderBy: { updatedAt: 'desc' }, 
+            select: { updatedAt: true } 
+          }),
+          prisma.declarationCumUndertaking.findFirst({ 
+            where: { userId: agency.id, status: 'SUBMITTED' }, 
+            orderBy: { updatedAt: 'desc' }, 
+            select: { updatedAt: true } 
+          }),
+          prisma.agencyVisit.findFirst({ 
+            where: { agencyId: agency.id, status: 'SUBMITTED' }, 
+            orderBy: { updatedAt: 'desc' }, 
+            select: { updatedAt: true } 
+          }),
+          prisma.monthlyCompliance.findFirst({ 
+            where: { agencyId: agency.id, status: 'SUBMITTED' }, 
+            orderBy: { updatedAt: 'desc' }, 
+            select: { updatedAt: true } 
+          }),
+        ]);
+
+        const recentForms = recentFormsResults
+          .filter((result): result is PromiseFulfilledResult<{ updatedAt: Date }> => 
+            result.status === 'fulfilled' && result.value !== null
+          )
+          .map(result => result.value);
+
+        const lastSubmissionDate = recentForms.length > 0
+          ? recentForms.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0]?.updatedAt ?? null
+          : null;
+
+        // Fetch pending forms with error handling
+        const pendingFormsResults = await Promise.allSettled([
           prisma.codeOfConduct.count({ where: { userId: agency.id, status: 'DRAFT' } }),
           prisma.declarationCumUndertaking.count({ where: { userId: agency.id, status: 'DRAFT' } }),
           prisma.agencyVisit.count({ where: { agencyId: agency.id, status: 'DRAFT' } }),
           prisma.monthlyCompliance.count({ where: { agencyId: agency.id, status: 'DRAFT' } }),
         ]);
+
+        const pendingForms = pendingFormsResults
+          .filter((result): result is PromiseFulfilledResult<number> => result.status === 'fulfilled')
+          .map(result => result.value);
+        
         const totalPending = pendingForms.reduce((sum, count) => sum + count, 0);
 
         const agencyInfo: AssignedAgencyInfo = {
@@ -605,18 +654,50 @@ export async function getAssignedAgenciesForCMAction() {
             id: assignment.id,
             assignedAt: assignment.assignedAt,
             viewedByAt: assignment.viewedByAt,
-            isActive: assignment.isActive, 
-            updatedAt: assignment.updatedAt, 
+            isActive: assignment.isActive,
+            updatedAt: assignment.updatedAt,
           }
         };
         return agencyInfo;
-      })
-    );
+      } catch (err) {
+        // Log error securely without exposing sensitive data
+        console.error(`Error processing agency stats`);
+        // Return minimal info if stats fetching fails
+        return {
+          id: agency.id,
+          name: agency.name,
+          email: agency.email,
+          createdAt: agency.createdAt,
+          lastSubmissionDate: null,
+          totalSubmissions: 0,
+          pendingForms: 0,
+          assignment: {
+            id: assignment.id,
+            assignedAt: assignment.assignedAt,
+            viewedByAt: assignment.viewedByAt,
+            isActive: assignment.isActive,
+            updatedAt: assignment.updatedAt,
+          }
+        } as AssignedAgencyInfo;
+      }
+    });
+
+    const agenciesWithStats = await Promise.all(agenciesWithStatsPromises);
 
     return { success: true, agencies: agenciesWithStats };
   } catch (error) {
-    console.error("Error fetching assigned agencies:", error);
-    return { error: "Failed to fetch assigned agencies" };
+    // Secure error logging - don't expose internal details to client
+    console.error("Error in getAssignedAgenciesForCMAction");
+    
+    // Log detailed error only in development
+    if (process.env.NODE_ENV === 'development' && error instanceof Error) {
+      console.error("Dev error details:", {
+        name: error.name,
+        message: error.message,
+      });
+    }
+    
+    return { error: "Failed to fetch assigned agencies. Please try again." };
   }
 }
 

@@ -30,19 +30,17 @@ type GetUsersResponse = {
   error?: string;
 };
 
-// --- Zod Schema for Validation (FIX: Added missing definition) ---
-
-// Schema to validate all inputs passed from the client
+// --- Zod Schema for Validation ---
 const GetUsersSchema = z.object({
   page: z.number().int().min(1, "Page must be at least 1."),
   pageSize: z
     .number()
     .int()
     .min(1, "Page size must be at least 1.")
-    .max(100, "Page size cannot exceed 100."), // Good practice to cap page size
+    .max(100, "Page size cannot exceed 100."),
   searchQuery: z.string(),
-  month: z.number().int().min(1).max(12), // Not used in this query, but passed by client
-  year: z.number().int().min(2020), // Not used in this query, but passed by client
+  month: z.number().int().min(1).max(12),
+  year: z.number().int().min(2020),
   role: z.nativeEnum(UserRole).refine(() => true, { message: "Invalid role." }),
 });
 
@@ -63,7 +61,14 @@ export async function getFormSubmissionsAction(): Promise<{ submissions?: FormSu
       const prismaModel = (prisma as any)[modelName];
       if (!prismaModel) return [];
       
-      const userRelationField = formType === 'agencyVisits' ? 'agencyId' : 'userId';
+      // FIX: Added 'noDuesDeclaration' to use 'agencyId'
+      const userRelationField = (
+          formType === 'agencyVisits' || 
+          formType === 'monthlyCompliance' ||
+          formType === 'noDuesDeclaration'
+        ) 
+        ? 'agencyId' 
+        : 'userId';
       
       const submissions: { id: string; status: SubmissionStatus; createdAt: Date; updatedAt: Date }[] = await prismaModel.findMany({
         where: { [userRelationField]: userId },
@@ -108,7 +113,6 @@ export async function getUsersWithSubmissionStats(
   });
 
   if (!validation.success) {
-    // Log the detailed error for debugging
     console.error("Invalid input for getUsersWithSubmissionStats:", validation.error.format());
     return {
       users: [],
@@ -120,8 +124,6 @@ export async function getUsersWithSubmissionStats(
   const { data } = validation;
 
   // 2. Security: Authenticate and Authorize
-  // The 'auth' function comes from your NextAuth setup (e.g., /lib/auth.ts)
-  // The error "This expression is not callable" suggests an issue with your auth.ts file or the import
   const headersList = await headers();
   const session = await auth.api.getSession({ headers: headersList });
   if (!session?.user || session.user.role !== UserRole.ADMIN) {
@@ -133,7 +135,6 @@ export async function getUsersWithSubmissionStats(
     role: data.role,
   };
 
-  // Add search query if it's not empty
   if (data.searchQuery) {
     whereClause.OR = [
       { name: { contains: data.searchQuery, mode: "insensitive" } },
@@ -143,9 +144,7 @@ export async function getUsersWithSubmissionStats(
 
   // 4. Database Query
   try {
-    // Use a $transaction to ensure the count and data are consistent
     const [users, totalCount] = await prisma.$transaction([
-      // Query 1: Get the paginated users
       prisma.user.findMany({
         where: whereClause,
         select: {
@@ -156,17 +155,16 @@ export async function getUsersWithSubmissionStats(
         skip: (data.page - 1) * data.pageSize,
         take: data.pageSize,
         orderBy: {
-          name: "asc", // Or createdAt: 'desc'
+          name: "asc",
         },
       }),
-      // Query 2: Get the total count matching the filters
       prisma.user.count({
         where: whereClause,
       }),
     ]);
 
     return { users, totalCount };
-  } catch (err) { // FIX: Removed the typo "_" from "catch (err)_ {"
+  } catch (err) {
     console.error("Failed to fetch users:", err);
     return {
       users: [],
@@ -192,7 +190,6 @@ export async function getUserFormStatus(userId: string, month?: number, year?: n
     const targetMonth = month ?? now.getMonth() + 1;
     const targetYear = year ?? now.getFullYear();
     
-    // Calculate date range for the month
     const startDate = new Date(targetYear, targetMonth - 1, 1);
     const endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59);
 
@@ -211,9 +208,15 @@ export async function getUserFormStatus(userId: string, month?: number, year?: n
         const prismaModel = (prisma as any)[modelName];
         if (!prismaModel) return;
 
-        const userRelationField = formType === 'agencyVisits' ? 'agencyId' : 'userId';
+        // FIX: Added 'noDuesDeclaration' to use 'agencyId'
+        const userRelationField = (
+            formType === 'agencyVisits' || 
+            formType === 'monthlyCompliance' ||
+            formType === 'noDuesDeclaration'
+          )
+          ? 'agencyId'
+          : 'userId';
         
-        // Find submissions for this form type in the target month
         const submission = await prismaModel.findFirst({
           where: {
             [userRelationField]: userId,
@@ -274,7 +277,14 @@ export async function getAllSubmissionsForAdmin() {
             const prismaModel = (prisma as any)[modelName];
             if (!prismaModel) return [];
 
-            const userRelationField = formType === 'agencyVisits' ? 'agency' : 'user';
+            // FIX: Added 'noDuesDeclaration' to use the 'agency' relation
+            const userRelationField = (
+                formType === 'agencyVisits' || 
+                formType === 'monthlyCompliance' ||
+                formType === 'noDuesDeclaration'
+              ) 
+              ? 'agency' 
+              : 'user';
 
             const submissions = await prismaModel.findMany({
                 include: { [userRelationField]: { select: { id: true, name: true } } },
@@ -316,7 +326,14 @@ export async function getSubmissionsForUser(userId: string) {
             const prismaModel = (prisma as any)[modelName];
             if (!prismaModel) return [];
 
-            const userRelationField = formType === 'agencyVisits' ? 'agencyId' : 'userId';
+            // FIX: Added 'noDuesDeclaration' to use 'agencyId'
+            const userRelationField = (
+                formType === 'agencyVisits' || 
+                formType === 'monthlyCompliance' ||
+                formType === 'noDuesDeclaration'
+              )
+              ? 'agencyId'
+              : 'userId';
             
             const submissions = await prismaModel.findMany({
                 where: { [userRelationField]: userId },

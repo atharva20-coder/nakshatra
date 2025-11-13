@@ -1,7 +1,7 @@
 // src/app/collectionManager/dashboard/page.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react"; // Added useCallback
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { 
@@ -21,7 +21,6 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { AdvisoryMarquee } from "@/components/AdvisoryMarquee";
 
-// FIX: Client components cannot be async
 export default function CMDashboardPage() {
   const router = useRouter();
   const { data: session, isPending: isSessionPending } = useSession();
@@ -30,7 +29,6 @@ export default function CMDashboardPage() {
   const [filteredAgencies, setFilteredAgencies] = useState<AssignedAgencyInfo[]>([]);
   const [newAgencies, setNewAgencies] = useState<AssignedAgencyInfo[]>([]); 
   
-  // Filter states
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [selectedYear, setSelectedYear] = useState<string>("all");
@@ -39,7 +37,6 @@ export default function CMDashboardPage() {
   const [isDismissing, setIsDismissing] = useState(false); 
   const [error, setError] = useState<string | null>(null);
 
-  // Memoized filter options
   const monthOptions = useMemo(() => [
     { value: "all", label: "All Months" },
     ...Array.from({ length: 12 }, (_, i) => ({
@@ -59,7 +56,6 @@ export default function CMDashboardPage() {
     ];
   }, []);
 
-  // FIX: Moved async logic into a useCallback
   const fetchAssignedAgencies = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -69,20 +65,24 @@ export default function CMDashboardPage() {
       
       if (result.error) {
         setError(result.error);
+        toast.error(result.error);
       } else if (result.success && result.agencies) {
         setAllAgencies(result.agencies);
         setFilteredAgencies(result.agencies);
         setNewAgencies(result.agencies.filter(a => a.assignment.viewedByAt === null && a.assignment.isActive));
+      } else {
+        setError("Unexpected response from server");
       }
     } catch (err) {
       console.error("Error fetching agencies:", err);
-      setError("Failed to load assigned agencies");
+      const errorMessage = err instanceof Error ? err.message : "Failed to load assigned agencies";
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
-  }, []); // Empty dependency array
+  }, []);
 
-  // Fetch agencies on mount
   useEffect(() => {
     if (isSessionPending) return;
     
@@ -92,13 +92,11 @@ export default function CMDashboardPage() {
     }
 
     fetchAssignedAgencies();
-  }, [session, isSessionPending, router, fetchAssignedAgencies]); // Added fetchAssignedAgencies
+  }, [session, isSessionPending, router, fetchAssignedAgencies]);
 
-  // Filter agencies when search or filters change
   useEffect(() => {
     let agencies = [...allAgencies];
 
-    // 1. Filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       agencies = agencies.filter(
@@ -108,7 +106,6 @@ export default function CMDashboardPage() {
       );
     }
 
-    // 2. Filter by assigned month
     if (selectedMonth !== "all") {
       const month = parseInt(selectedMonth, 10);
       agencies = agencies.filter(agency => {
@@ -117,7 +114,6 @@ export default function CMDashboardPage() {
       });
     }
 
-    // 3. Filter by assigned year
     if (selectedYear !== "all") {
       const year = parseInt(selectedYear, 10);
       agencies = agencies.filter(agency => {
@@ -128,7 +124,6 @@ export default function CMDashboardPage() {
 
     setFilteredAgencies(agencies);
   }, [searchQuery, selectedMonth, selectedYear, allAgencies]);
-
 
   const handleAgencyClick = (agencyId: string) => {
     router.push(`/collectionManager/agencies/${agencyId}`);
@@ -180,7 +175,7 @@ export default function CMDashboardPage() {
   return (
     <div className="container mx-auto p-6 space-y-6 min-h-screen">
       <AdvisoryMarquee />
-      {/* --- NEW ASSIGNMENT BANNER --- */}
+      
       {newAgencies.length > 0 && (
         <Card className="border-blue-500 bg-blue-50 dark:bg-blue-900/30">
           <CardHeader className="pb-4">
@@ -212,7 +207,6 @@ export default function CMDashboardPage() {
         </Card>
       )}
 
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Collection Manager Dashboard</h1>
@@ -221,11 +215,9 @@ export default function CMDashboardPage() {
         <ReturnButton href="/profile" label="Back to Profile" />
       </div>
 
-      {/* Filters Bar */}
       <Card>
         <CardContent className="p-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Search Bar */}
             <div className="md:col-span-1">
               <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">Search Agency</label>
               <div className="relative">
@@ -241,7 +233,6 @@ export default function CMDashboardPage() {
               </div>
             </div>
             
-            {/* Month Filter */}
             <div>
               <label htmlFor="month" className="block text-sm font-medium text-gray-700 mb-1">Assignment Month</label>
               <Select value={selectedMonth} onValueChange={setSelectedMonth}>
@@ -256,7 +247,6 @@ export default function CMDashboardPage() {
               </Select>
             </div>
             
-            {/* Year Filter */}
             <div>
               <label htmlFor="year" className="block text-sm font-medium text-gray-700 mb-1">Assignment Year</label>
               <Select value={selectedYear} onValueChange={setSelectedYear}>
@@ -274,7 +264,6 @@ export default function CMDashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Stats Bar */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6">
@@ -326,7 +315,6 @@ export default function CMDashboardPage() {
         </Card>
       </div>
 
-      {/* Loading State */}
       {isLoading && (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-rose-900" />
@@ -334,7 +322,6 @@ export default function CMDashboardPage() {
         </div>
       )}
 
-      {/* Error State */}
       {error && (
         <Card className="border-red-200 bg-red-50">
           <CardContent className="pt-6">
@@ -354,7 +341,6 @@ export default function CMDashboardPage() {
         </Card>
       )}
 
-      {/* Empty State */}
       {!isLoading && !error && filteredAgencies.length === 0 && (
         <Card>
           <CardContent className="pt-12 pb-12 text-center">
@@ -375,7 +361,6 @@ export default function CMDashboardPage() {
         </Card>
       )}
 
-      {/* Agency Cards Grid */}
       {!isLoading && !error && filteredAgencies.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredAgencies.map((agency) => {
@@ -410,7 +395,6 @@ export default function CMDashboardPage() {
                 
                 <CardContent className="space-y-3 flex-1 flex flex-col justify-between">
                   <div className="space-y-3">
-                    {/* Assignment Period - As Requested */}
                     <div className="flex items-center justify-between text-sm pt-3 border-t">
                       <span className="text-gray-600 flex items-center gap-2">
                         <Calendar className="h-4 w-4" />
@@ -456,7 +440,7 @@ export default function CMDashboardPage() {
                   <Button 
                     className="w-full bg-rose-900 hover:bg-rose-800 text-white mt-4"
                     onClick={() => handleAgencyClick(agency.id)}
-                    disabled={!isActive} // Disable button if not active
+                    disabled={!isActive}
                   >
                     {isActive ? "View Details" : "Assignment Inactive"}
                   </Button>

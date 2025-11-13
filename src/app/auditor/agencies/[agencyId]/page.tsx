@@ -31,7 +31,6 @@ export default async function AgencyAuditPage({ params }: AgencyAuditPageProps) 
 
   return (
     <div className="container mx-auto p-8">
-      <PageHeader returnHref="/auditor/dashboard" returnLabel="Back to Dashboard" />
       <AgencyAuditClient 
         agency={result.agency!} 
         audits={result.audits || []} 

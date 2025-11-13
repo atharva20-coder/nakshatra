@@ -80,7 +80,7 @@ export function ObservationListAdmin({ initialAudit }: ObservationListAdminProps
             <div className="text-right text-sm text-muted-foreground">
               <p>Auditor: {initialAudit.auditor?.user?.name || "N/A"}</p>
               <p>Firm: {initialAudit.firm?.name || "N/A"}</p>
-              <p>Date: {new Date(initialAudit.auditDate).toLocaleDateString()}</p>
+              <p>Date: {new Date(initialAudit.auditDate).toISOString().split('T')[0]}</p>
             </div>
           </div>
         </CardHeader>
