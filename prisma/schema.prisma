@@ -1041,10 +1041,16 @@ model Announcement {
   
   audience    UserRole[] // Array of roles to target (e.g., [ADMIN, USER, AUDITOR])
   
+  isScheduled Boolean    @default(false)
+  scheduledFor DateTime? // When to publish (null = publish immediately)
+  isPublished Boolean    @default(false) // Whether it's currently live
+  publishedAt DateTime?  // When it was actually published
+  
   readBy      AnnouncementRead[]
 
   @@map("announcements")
   @@index([authorId])
+  @@index([isPublished, scheduledFor]) // For efficient scheduled query
 }
 
 model AnnouncementRead {

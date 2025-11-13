@@ -110,10 +110,18 @@ export default async function AuditManagementPage() { // Renamed component for c
               Review all audits, track their status, and publish scorecards.
             </p>
           </div>
-          <ReturnButton 
-            href={session.user.role === "SUPER_ADMIN" ? "/super/dashboard" : "/admin/dashboard"} 
-            label="Back to Dashboard" 
-          />
+          <div className="flex gap-3">
+  <Button asChild variant="default">
+    <Link href="/admin/bulk-scn">
+      Bulk SCN Management
+    </Link>
+  </Button>
+  <ReturnButton 
+    href={session.user.role === "SUPER_ADMIN" ? "/super/dashboard" : "/admin/dashboard"} 
+    label="Back to Dashboard" 
+  />
+</div>
+
         </div>
 
         <Card>
