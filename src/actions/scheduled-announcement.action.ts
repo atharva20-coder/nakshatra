@@ -82,6 +82,8 @@ export async function getAllAnnouncementsForSuperAdminAction(): Promise<
     (Announcement & {
       author: { name: string | null };
       _count: { readBy: number };
+      formattedScheduledFor?: string | null;
+      formattedPublishedAt?: string | null;
     })[]
   >
 > {
@@ -95,9 +97,9 @@ export async function getAllAnnouncementsForSuperAdminAction(): Promise<
   try {
     const announcements = await prisma.announcement.findMany({
       orderBy: [
-        { isPublished: 'desc' }, // Published first
-        { scheduledFor: 'asc' }, // Then by schedule date
-        { createdAt: 'desc' }    // Then by creation date
+        { isPublished: 'desc' },
+        { scheduledFor: 'asc' },
+        { createdAt: 'desc' },
       ],
       include: {
         author: { select: { name: true } },
@@ -105,11 +107,23 @@ export async function getAllAnnouncementsForSuperAdminAction(): Promise<
       },
     });
 
-    return { success: true, data: announcements };
+    // 🔹 Format dates as deterministic UTC strings
+    const formatted = announcements.map((a) => ({
+      ...a,
+      formattedScheduledFor: a.scheduledFor
+        ? new Date(a.scheduledFor).toISOString().replace('T', ' ').slice(0, 16)
+        : null,
+      formattedPublishedAt: a.publishedAt
+        ? new Date(a.publishedAt).toISOString().replace('T', ' ').slice(0, 16)
+        : null,
+    }));
+
+    return { success: true, data: formatted };
   } catch (error) {
     return { success: false, error: getErrorMessage(error) };
   }
 }
+
 
 /**
  * Get unread PUBLISHED announcements for user's role

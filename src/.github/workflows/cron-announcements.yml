@@ -1,0 +1,23 @@
+name: Frequent Cron (Publish Announcements)
+
+on:
+  schedule:
+    # Runs every 10 minutes
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  publish-announcements:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Publish Announcements API
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" -X POST ${{ secrets.APP_URL }}/api/cron/publish-announcements \
+          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          
+          if [ "$response" -ne 200 ]; then
+            echo "API call failed with status code: $response"
+            exit 1
+          else
+            echo "Success! Status code: $response"
+          fi
