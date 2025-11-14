@@ -18,7 +18,7 @@ jobs:
           
           # Step 1: Mark overdue forms (runs every day)
           echo "=== Step 1: Marking overdue forms ==="
-          overdue_response=$(curl -s -w "\n%{http_code}" -X POST ${{ secrets.APP_URL }}/api/cron/mark-overdue \
+          overdue_response=$(curl -s -w "\n%{http_code}" -X POST ${{ secrets.APP_URL }}/api/cron/refresh-forms \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
           
           overdue_code=$(echo "$overdue_response" | tail -n1)
