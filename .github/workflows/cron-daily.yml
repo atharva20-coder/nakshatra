@@ -1,23 +1,55 @@
-name: Daily Cron (Mark Overdue)
+name: Daily Cron (Mark Overdue & Refresh Forms)
 
 on:
   schedule:
-    # Runs at 19:30 UTC (which is 1:00 AM IST)
+    # Runs at 19:30 UTC every day (1:00 AM IST next day)
     - cron: '30 19 * * *'
-  workflow_dispatch: # Allows manual triggering from GitHub UI
+  workflow_dispatch: # Manual trigger
 
 jobs:
-  mark-overdue:
+  process-forms:
     runs-on: ubuntu-latest
     steps:
-      - name: Call Mask Overdue API
+      - name: Check date and process forms
         run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" -X POST ${{ secrets.APP_URL }}/api/cron/mask-overdue \
-          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          # Get current day of month in IST
+          current_day=$(TZ='Asia/Kolkata' date +%d)
+          echo "Current day in IST: $current_day"
           
-          if [ "$response" -ne 200 ]; then
-            echo "API call failed with status code: $response"
+          # Step 1: Mark overdue forms (runs every day)
+          echo "=== Step 1: Marking overdue forms ==="
+          overdue_response=$(curl -s -w "\n%{http_code}" -X POST ${{ secrets.APP_URL }}/api/cron/mark-overdue \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          
+          overdue_code=$(echo "$overdue_response" | tail -n1)
+          overdue_body=$(echo "$overdue_response" | head -n-1)
+          
+          echo "Response: $overdue_body"
+          
+          if [ "$overdue_code" -ne 200 ]; then
+            echo "❌ Mark overdue failed with status: $overdue_code"
             exit 1
+          fi
+          echo "✅ Successfully marked overdue forms"
+          
+          # Step 2: Refresh forms (only on 5th of month)
+          if [ "$current_day" = "05" ]; then
+            echo ""
+            echo "=== Step 2: Refreshing forms for new month ==="
+            refresh_response=$(curl -s -w "\n%{http_code}" -X POST ${{ secrets.APP_URL }}/api/cron/refresh-forms \
+              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+            
+            refresh_code=$(echo "$refresh_response" | tail -n1)
+            refresh_body=$(echo "$refresh_response" | head -n-1)
+            
+            echo "Response: $refresh_body"
+            
+            if [ "$refresh_code" -ne 200 ]; then
+              echo "❌ Form refresh failed with status: $refresh_code"
+              exit 1
+            fi
+            echo "✅ Successfully refreshed forms"
           else
-            echo "Success! Status code: $response"
+            echo ""
+            echo "ℹ️ Skipping form refresh (only runs on 5th of month)"
           fi

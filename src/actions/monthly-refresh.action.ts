@@ -111,7 +111,9 @@ async function shouldRefreshForm(
   now: Date
 ): Promise<{ shouldRefresh: boolean; reason: string }> {
   const model = getPrismaDelegate(formType);
-  const userField = formType === "agencyVisits" ? "agencyId" : "userId";
+  const userField = ["agencyVisits", "monthlyCompliance", "noDuesDeclaration"].includes(formType)
+    ? "agencyId"
+    : "userId";
 
   const latestForm = await model.findFirst({
     where: { [userField]: userId },
@@ -171,7 +173,9 @@ export async function getUserFormStatusAction(userId: string) {
     (typeof FORM_CONFIGS)[FormType]
   ][]) {
     const model = getPrismaDelegate(formType);
-    const userField = formType === "agencyVisits" ? "agencyId" : "userId";
+    const userField = ["agencyVisits", "monthlyCompliance", "noDuesDeclaration"].includes(formType)
+      ? "agencyId"
+      : "userId";
 
     const latestForm = await model.findFirst({
       where: { [userField]: userId },
@@ -232,6 +236,7 @@ export async function getUserFormStatusAction(userId: string) {
 
 /**
  * Mark overdue forms (run via cron)
+ * NOTE: Penalty Matrix is excluded as it's not a required form
  */
 export async function markOverdueFormsAction() {
   const headersList = await headers();
@@ -243,66 +248,103 @@ export async function markOverdueFormsAction() {
 
   try {
     const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+    const currentDay = now.getDate();
+
+    console.log(`⏰ [MARK OVERDUE] Starting at ${now.toISOString()}`);
+    console.log(`📅 Current: ${currentYear}-${currentMonth}-${currentDay}`);
+
+    // Only mark as overdue if we're past the 5th of the month
+    if (currentDay < 5) {
+      console.log(`📅 Day ${currentDay} - forms not yet overdue`);
+      return { 
+        success: true, 
+        totalOverdue: 0, 
+        overdueDetails: [],
+        message: "Not yet past deadline"
+      };
+    }
+
+    // Check forms that should have been submitted by 5th of current month
+    // These are forms for the PREVIOUS month
+    const targetMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+    const targetYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+
+    console.log(`🔍 Checking ${getMonthName(targetMonth)} ${targetYear} submissions`);
+
     const users: Pick<User, "id" | "name" | "email" | "createdAt">[] =
       await prisma.user.findMany({
         where: { role: "USER" },
         select: { id: true, name: true, email: true, createdAt: true },
       });
 
+    console.log(`👥 Processing ${users.length} agencies`);
+
     let totalOverdue = 0;
-    const overdueDetails: Array<{ userId: string; formType: string; userName: string }> = [];
+    const overdueDetails: Array<{ 
+      userId: string; 
+      formType: string; 
+      userName: string;
+      formTitle: string;
+    }> = [];
 
     for (const user of users) {
       for (const [formType, config] of Object.entries(FORM_CONFIGS) as [
         FormType,
         (typeof FORM_CONFIGS)[FormType]
       ][]) {
+        // Skip non-required forms (like penalty matrix)
         if (!config.isRequired) continue;
 
         const model = getPrismaDelegate(formType);
-        const userField = formType === "agencyVisits" ? "agencyId" : "userId";
+        const userField = ["agencyVisits", "monthlyCompliance", "noDuesDeclaration"].includes(formType)
+          ? "agencyId"
+          : "userId";
 
-        const latestForm = await model.findFirst({
-          where: { [userField]: user.id },
-          orderBy: { createdAt: "desc" },
+        // Check for form in target month
+        const startDate = new Date(targetYear, targetMonth - 1, 1);
+        const endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59);
+
+        const form = await model.findFirst({
+          where: {
+            [userField]: user.id,
+            createdAt: { gte: startDate, lte: endDate }
+          },
+          select: { id: true, status: true }
         } as object);
 
-        const validity =
-          latestForm &&
-          getFormValidityPeriod(
-            latestForm.createdAt,
-            config.category as "monthly" | "annual",
-            config.deadlineDay
-          );
-
-        const isOverdueNow =
-          !latestForm ||
-          isFormOverdue(latestForm.status, validity!.end, now);
-
-        if (isOverdueNow) {
+        // Mark as overdue if not submitted
+        if (!form || form.status !== SubmissionStatus.SUBMITTED) {
           totalOverdue++;
-          overdueDetails.push({ userId: user.id, formType, userName: user.name });
+          overdueDetails.push({ 
+            userId: user.id, 
+            formType, 
+            userName: user.name,
+            formTitle: config.title
+          });
 
+          // Send overdue notification
           await createNotificationAction(
             user.id,
             NotificationType.SYSTEM_ALERT,
-            "Form Overdue",
-            `Your ${config.title} form is overdue. Please submit it as soon as possible.`,
+            "❌ Form Overdue",
+            `${config.title} for ${getMonthName(targetMonth)} ${targetYear} is overdue. Submit immediately to avoid penalties and unlock new forms.`,
             `/user/forms/${formType}`,
-            latestForm?.id,
+            form?.id,
             "form"
           );
 
-          if (latestForm) {
+          if (form) {
             await logFormActivityAction({
               action: ActivityAction.FORM_CREATED,
               entityType: formType,
               description: `Form marked as overdue`,
-              entityId: latestForm.id,
+              entityId: form.id,
               metadata: {
                 status: "OVERDUE",
-                validityEnd: validity!.end.toISOString(),
-                currentStatus: latestForm.status,
+                targetMonth: getMonthName(targetMonth),
+                targetYear,
               },
             });
           }
@@ -310,12 +352,218 @@ export async function markOverdueFormsAction() {
       }
     }
 
-    return { success: true, totalOverdue, overdueDetails };
+    console.log(`✅ [MARK OVERDUE] Complete - ${totalOverdue} forms marked`);
+
+    return { 
+      success: true, 
+      totalOverdue, 
+      overdueDetails,
+      targetMonth: getMonthName(targetMonth),
+      targetYear
+    };
   } catch (error) {
-    console.error("Error marking overdue forms:", error);
+    console.error("❌ [MARK OVERDUE] Error:", error);
     return { error: "Failed to mark overdue forms" };
   }
 }
+
+// ============================================
+// NEW: AUTOMATIC FORM REFRESH FUNCTIONS
+// ============================================
+
+/**
+ * Refresh forms for eligible agencies (no overdue forms)
+ * Called automatically on 5th of each month via cron
+ * NOTE: Penalty Matrix is excluded as it's not a required form
+ */
+export async function refreshEligibleAgencyFormsAction() {
+  try {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1; // 1-12
+    const currentYear = now.getFullYear();
+    
+    // Calculate previous month for checking overdue status
+    const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+    const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+
+    console.log(`🔄 [AUTO REFRESH] Starting at ${now.toISOString()}`);
+    console.log(`📅 New forms for: ${getMonthName(currentMonth)} ${currentYear}`);
+    console.log(`📋 Checking: ${getMonthName(prevMonth)} ${prevYear} submissions`);
+
+    // Get all agencies
+    const agencies = await prisma.user.findMany({
+      where: { role: "USER" },
+      select: { id: true, name: true, email: true }
+    });
+
+    console.log(`👥 Processing ${agencies.length} agencies...`);
+
+    let refreshedCount = 0;
+    let skippedCount = 0;
+    const details: Array<{
+      agencyId: string;
+      agencyName: string;
+      status: 'refreshed' | 'skipped';
+      reason?: string;
+      overdueFormsList?: string[];
+    }> = [];
+
+    for (const agency of agencies) {
+      // Check for overdue forms from previous month
+      const overdueCheck = await checkForOverdueForms(
+        agency.id,
+        prevMonth,
+        prevYear
+      );
+
+      if (overdueCheck.hasOverdue) {
+        // Skip this agency - has overdue forms
+        skippedCount++;
+        details.push({
+          agencyId: agency.id,
+          agencyName: agency.name,
+          status: 'skipped',
+          reason: `Has ${overdueCheck.overdueCount} overdue form(s)`,
+          overdueFormsList: overdueCheck.overdueFormsList
+        });
+
+        // Notify agency about blocked refresh
+        await createNotificationAction(
+          agency.id,
+          NotificationType.SYSTEM_ALERT,
+          "⚠️ New Forms Blocked",
+          `New forms for ${getMonthName(currentMonth)} ${currentYear} are not available because you have ${overdueCheck.overdueCount} overdue form(s) from ${getMonthName(prevMonth)} ${prevYear}. Complete these forms first: ${overdueCheck.overdueFormsList.join(", ")}`,
+          "/user/dashboard"
+        );
+
+        console.log(`⚠️ Skipped ${agency.name} - ${overdueCheck.overdueCount} overdue`);
+        continue;
+      }
+
+      // Agency is eligible - forms are now available for new month
+      refreshedCount++;
+      const availableForms = Object.entries(FORM_CONFIGS)
+        .filter(([_, config]) => config.isRequired)
+        .map(([_, config]) => config.title);
+
+      details.push({
+        agencyId: agency.id,
+        agencyName: agency.name,
+        status: 'refreshed'
+      });
+
+      // Notify about new forms availability
+      await createNotificationAction(
+        agency.id,
+        NotificationType.SYSTEM_ALERT,
+        "✅ New Forms Available",
+        `Forms for ${getMonthName(currentMonth)} ${currentYear} are now available. Submit all required forms before ${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-05 to avoid penalties.`,
+        "/user/dashboard"
+      );
+
+      // Log the refresh
+      await logFormActivityAction({
+        action: ActivityAction.FORM_CREATED,
+        entityType: "system",
+        description: `Auto-refresh: New forms available for ${agency.name}`,
+        metadata: {
+          agencyId: agency.id,
+          month: String(currentMonth),
+          year: String(currentYear),
+          previousMonth: prevMonth,
+          previousYear: prevYear,
+          availableForms
+        }
+      });
+
+      console.log(`✅ Refreshed for ${agency.name}`);
+    }
+
+    console.log(`\n📊 [AUTO REFRESH] Summary:`);
+    console.log(`   Total Agencies: ${agencies.length}`);
+    console.log(`   ✅ Refreshed: ${refreshedCount}`);
+    console.log(`   ⚠️ Skipped: ${skippedCount}`);
+
+    return {
+      success: true,
+      refreshedAgencies: refreshedCount,
+      skippedAgencies: skippedCount,
+      totalProcessed: agencies.length,
+      currentMonth: getMonthName(currentMonth),
+      currentYear,
+      details
+    };
+  } catch (error) {
+    console.error("❌ [AUTO REFRESH] Error:", error);
+    return { error: "Failed to refresh forms" };
+  }
+}
+
+/**
+ * Check if agency has overdue forms for a specific month
+ * NOTE: Only checks REQUIRED forms (penalty matrix excluded)
+ */
+async function checkForOverdueForms(
+  userId: string,
+  month: number,
+  year: number
+): Promise<{
+  hasOverdue: boolean;
+  overdueCount: number;
+  overdueFormsList: string[];
+}> {
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0, 23, 59, 59);
+  const overdueFormsList: string[] = [];
+
+  // Check each required form type (penalty matrix excluded)
+  for (const [formType, config] of Object.entries(FORM_CONFIGS) as [
+    FormType,
+    (typeof FORM_CONFIGS)[FormType]
+  ][]) {
+    // Skip non-required forms
+    if (!config.isRequired) continue;
+
+    const model = getPrismaDelegate(formType);
+    const userField = ["agencyVisits", "monthlyCompliance", "noDuesDeclaration"].includes(formType)
+      ? "agencyId"
+      : "userId";
+
+    const form = await model.findFirst({
+      where: {
+        [userField]: userId,
+        createdAt: { gte: startDate, lte: endDate }
+      },
+      select: { status: true }
+    } as object);
+
+    // Form is overdue if: doesn't exist OR not submitted
+    if (!form || form.status !== SubmissionStatus.SUBMITTED) {
+      overdueFormsList.push(config.title);
+    }
+  }
+
+  return {
+    hasOverdue: overdueFormsList.length > 0,
+    overdueCount: overdueFormsList.length,
+    overdueFormsList
+  };
+}
+
+/**
+ * Get month name from number (1-12)
+ */
+function getMonthName(month: number): string {
+  const names = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  return names[month - 1] || "";
+}
+
+// ============================================
+// EXISTING FUNCTIONS (PRESERVED)
+// ============================================
 
 /**
  * Manual form refresh
@@ -356,7 +604,9 @@ export async function getFormHistoryAction(userId: string, formType: FormType) {
 
   try {
     const model = getPrismaDelegate(formType);
-    const userField = formType === "agencyVisits" ? "agencyId" : "userId";
+    const userField = ["agencyVisits", "monthlyCompliance", "noDuesDeclaration"].includes(formType)
+      ? "agencyId"
+      : "userId";
     const includeField = getIncludeFieldForForm(formType);
 
     const submissions = await model.findMany({

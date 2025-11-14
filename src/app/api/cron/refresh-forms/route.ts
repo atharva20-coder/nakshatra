@@ -1,17 +1,13 @@
-// ============================================
-// FILE 2: src/app/api/cron/mark-overdue/route.ts
-// ============================================
+// src/app/api/cron/refresh-forms/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { markOverdueFormsAction } from '@/actions/monthly-refresh.action';
+import { refreshEligibleAgencyFormsAction } from '@/actions/monthly-refresh.action';
 
 /**
- * API Route for manual cron trigger
- * Can be called by external cron services (Vercel Cron, etc.)
- * 
- * Requires CRON_SECRET in environment variables
+ * API Route for automatic form refresh on 5th of each month
+ * Creates new form cycles only for agencies with no overdue forms
  */
 export async function POST(request: NextRequest) {
-  // Verify cron secret for security
+  // Verify cron secret
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
 
@@ -32,25 +28,30 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    console.log('⏰ [API CRON] Starting overdue check...');
-    const result = await markOverdueFormsAction();
+    const now = new Date();
+    console.log(`⏰ [CRON REFRESH] Starting at ${now.toISOString()}`);
+    
+    const result = await refreshEligibleAgencyFormsAction();
 
     if (result.error) {
-      console.error('❌ [API CRON] Error:', result.error);
+      console.error('❌ [CRON REFRESH] Error:', result.error);
       return NextResponse.json(
         { error: result.error },
         { status: 500 }
       );
     }
 
-    console.log(`✅ [API CRON] Marked ${result.totalOverdue} forms as overdue`);
+    console.log(`✅ [CRON REFRESH] Complete`);
+    console.log(`   Refreshed: ${result.refreshedAgencies} agencies`);
+    console.log(`   Skipped: ${result.skippedAgencies} agencies`);
+    
     return NextResponse.json({
       success: true,
-      totalOverdue: result.totalOverdue,
+      ...result,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ [API CRON] Unexpected error:', error);
+    console.error('❌ [CRON REFRESH] Unexpected error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -58,10 +59,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Allow GET for testing (remove in production)
 export async function GET() {
   return NextResponse.json({
-    message: 'Cron endpoint is active',
+    endpoint: 'Form Refresh Cron',
+    schedule: 'Runs on 5th of each month at 1:00 AM IST',
     note: 'Use POST with Bearer token to trigger'
   });
 }
