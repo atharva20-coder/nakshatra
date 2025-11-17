@@ -82,7 +82,52 @@ model User {
   readAnnouncements           AnnouncementRead[]
   // --- END NEW RELATIONS ---
 
+  agencyProfile   AgencyProfile?
+
   @@map("users")
+}
+
+model AgencyProfile {
+  id              String          @id @default(cuid())
+  userId          String          @unique
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Primary Details
+  vemId           String?         @unique
+  panCard         String?         @unique
+  agencyName      String
+  agencyAddress   String?         @db.Text
+  
+  // Key Person Details
+  proprietorName  String?
+  contactNo       String?
+  email           String
+  
+  // Branches
+  branches        AgencyBranch[]
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([userId])
+  @@index([vemId])
+  @@index([panCard])
+}
+
+model AgencyBranch {
+  id              String          @id @default(cuid())
+  agencyProfileId String
+  agencyProfile   AgencyProfile   @relation(fields: [agencyProfileId], references: [id], onDelete: Cascade)
+  
+  branchName      String
+  branchAddress   String          @db.Text
+  branchContact   String?
+  branchEmail     String?
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([agencyProfileId])
 }
 
 

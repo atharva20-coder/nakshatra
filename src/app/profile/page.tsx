@@ -4,8 +4,7 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PageHeader } from "@/components/agency-page-header"; // Keep the import
-import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/agency-page-header";
 import { UpdateUserForm } from "@/components/update-user-form";
 import { UserRole } from "@/generated/prisma";
 import { auth } from "@/lib/auth";
@@ -20,12 +19,11 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BranchDetailsManager } from "@/components/branch-details-manager";
-// Removed ActivityLogs import (using EnhancedActivityLogs instead)
 import { NotificationBell } from "@/components/notification-bell";
 import { EnhancedActivityLogs } from "@/components/enhanced-activity-logs";
-import { LayoutDashboard, UserCog, UserCheck, Search } from "lucide-react"; // Added icons
-import { CollectionManagerProfileForm } from "@/components/cm-profile-form"; // --- 1. IMPORT NEW COMPONENT ---
+import { LayoutDashboard, UserCog, UserCheck, Search } from "lucide-react";
+import { CollectionManagerProfileForm } from "@/components/cm-profile-form";
+import { AgencyProfileForm } from "@/components/agency-profile-form"; // NEW IMPORT
 
 export default async function Page() {
   const headersList = await headers();
@@ -40,20 +38,19 @@ export default async function Page() {
   const role = session.user.role;
 
   // Check if the user is an agency user (USER or COLLECTION_MANAGER)
-  const isAgencyUser =
-    role === UserRole.USER;
+  const isAgencyUser = role === UserRole.USER;
 
   const isAdminUser = role === UserRole.ADMIN;
   const isSuperAdmin = role === UserRole.SUPER_ADMIN;
   const isAuditor = role === UserRole.AUDITOR;
-  const isCollectionManager = role === UserRole.COLLECTION_MANAGER; // Keep this specific check
+  const isCollectionManager = role === UserRole.COLLECTION_MANAGER;
 
   // Determine the correct dashboard link based on role
   let dashboardLink: string | null = null;
   let dashboardLabel: string | null = null;
   let dashboardIcon: React.ReactNode | null = null;
 
-  // Set dashboard link based on role (excluding agency USER role, as they get PageHeader)
+  // Set dashboard link based on role
   if (isAdminUser) {
     dashboardLink = "/admin/dashboard";
     dashboardLabel = "Admin Panel";
@@ -67,22 +64,19 @@ export default async function Page() {
     dashboardLabel = "Auditor Dashboard";
     dashboardIcon = <Search className="mr-2 h-4 w-4" />;
   } else if (isCollectionManager) {
-    dashboardLink = "/collectionManager/dashboard"; // Use the requested path
+    dashboardLink = "/collectionManager/dashboard";
     dashboardLabel = "CM Dashboard";
     dashboardIcon = <UserCheck className="mr-2 h-4 w-4" />;
   } else if (role === UserRole.USER) {
-      // User role gets the PageHeader, no separate button needed here normally,
-      // but we can add one if desired, pointing to their dashboard.
-      dashboardLink = "/user/dashboard";
-      dashboardLabel = "Agency Dashboard";
-      dashboardIcon = <LayoutDashboard className="mr-2 h-4 w-4" />;
+    dashboardLink = "/user/dashboard";
+    dashboardLabel = "Agency Dashboard";
+    dashboardIcon = <LayoutDashboard className="mr-2 h-4 w-4" />;
   }
 
   // Determine the default tab based on role
   const defaultTab = isAgencyUser && role === UserRole.USER ? "agency" : "account";
   // Determine grid columns for TabsList based on whether agency tab is present
   const tabsListCols = isAgencyUser && role === UserRole.USER ? 'grid-cols-3' : 'grid-cols-2';
-
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -101,7 +95,7 @@ export default async function Page() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {/* Conditional Dashboard Button for Non-Agency Users */}
+            {/* Conditional Dashboard Button */}
             {dashboardLink && dashboardLabel && (
               <Button
                 size="sm"
@@ -114,25 +108,20 @@ export default async function Page() {
                 </Link>
               </Button>
             )}
-             {/* Notification Bell for Admins/Super Admins */}
+            {/* Notification Bell for Admins/Super Admins */}
             {(isAdminUser || isSuperAdmin) && <NotificationBell />}
             <SignOutButton />
           </div>
         </div>
 
         {/* --- TABS SECTION --- */}
-        <Tabs
-          defaultValue={defaultTab}
-          className="space-y-8"
-        >
-          <TabsList
-            className={`grid ${tabsListCols} w-full max-w-md mx-auto`}
-          >
+        <Tabs defaultValue={defaultTab} className="space-y-8">
+          <TabsList className={`grid ${tabsListCols} w-full max-w-md mx-auto`}>
             {/* Agency Details Tab only for USER role */}
             {role === UserRole.USER && (
-                <TabsTrigger value="agency">Agency Details</TabsTrigger>
+              <TabsTrigger value="agency">Agency Details</TabsTrigger>
             )}
-             {/* Admin/Auditor/CM Details Tab */}
+            {/* Admin/Auditor/CM Details Tab */}
             {(isAdminUser || isSuperAdmin || isAuditor || isCollectionManager) && (
               <TabsTrigger value="admin">
                 {isSuperAdmin
@@ -149,29 +138,24 @@ export default async function Page() {
           </TabsList>
 
           {/* === TAB: ADMIN / SUPER_ADMIN / AUDITOR / COLLECTION_MANAGER === */}
-          {(isAdminUser ||
-            isSuperAdmin ||
-            isAuditor ||
-            isCollectionManager) && (
+          {(isAdminUser || isSuperAdmin || isAuditor || isCollectionManager) && (
             <TabsContent value="admin" className="space-y-10">
-              
-              {/* --- 2. ADD CONDITIONAL LOGIC HERE --- */}
               {isCollectionManager ? (
-                // For Collection Managers, show the new dynamic form
+                // For Collection Managers, show the dynamic form
                 <CollectionManagerProfileForm />
               ) : (
-                // For Admins, Super Admins, and Auditors, show the original static card
+                // For Admins, Super Admins, and Auditors, show the static card
                 <section className="space-y-8">
                   <div className="pb-4 border-b dark:border-gray-700">
                     <h2 className="text-3xl font-bold text-neutral-800 dark:text-neutral-100">
-                        {isSuperAdmin
+                      {isSuperAdmin
                         ? "Super Admin Information"
                         : isAuditor
                         ? "Auditor Information"
                         : "Admin Information"}
                     </h2>
                     <p className="text-muted-foreground text-sm mt-1 dark:text-gray-400">
-                        {isSuperAdmin
+                      {isSuperAdmin
                         ? "Overview of your system-level credentials and privileges."
                         : isAuditor
                         ? "Overview of your audit credentials and assigned reports."
@@ -181,7 +165,7 @@ export default async function Page() {
                   <Card className="bg-white dark:bg-gray-800">
                     <CardHeader>
                       <CardTitle className="dark:text-gray-100">
-                          {isSuperAdmin
+                        {isSuperAdmin
                           ? "Super Admin Details"
                           : isAuditor
                           ? "Auditor Details"
@@ -221,13 +205,11 @@ export default async function Page() {
                   </Card>
                 </section>
               )}
-              {/* --- END OF MODIFICATION --- */}
-
             </TabsContent>
           )}
 
           {/* === TAB: AGENCY DETAILS (Only for USER role) === */}
-          {role === UserRole.USER && ( // Changed condition to specifically check for USER role
+          {role === UserRole.USER && (
             <TabsContent value="agency" className="space-y-10">
               <section className="space-y-8">
                 <div className="pb-4 border-b dark:border-gray-700">
@@ -235,101 +217,12 @@ export default async function Page() {
                     Agency Information
                   </h2>
                   <p className="text-muted-foreground text-sm mt-1 dark:text-gray-400">
-                    Manage your agency’s official details, key personnel, and
-                    branches.
+                    Manage your agency&apos;s official details, key personnel, and branches.
                   </p>
                 </div>
 
-                <form className="space-y-10">
-                  {/* --- PRIMARY DETAILS --- */}
-                  <Card className="bg-white dark:bg-gray-800">
-                    <CardHeader>
-                      <CardTitle className="dark:text-gray-100">Primary Details</CardTitle>
-                    </CardHeader>
-                     <CardContent className="space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <Label htmlFor="vemId" className="dark:text-gray-300">Agency VEM ID</Label>
-                          <Input id="vemId" placeholder="Enter VEM ID" className="dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400 dark:border-gray-600"/>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="pan" className="dark:text-gray-300">Agency PAN Card No.</Label>
-                          <Input id="pan" placeholder="Enter PAN Card No." className="dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400 dark:border-gray-600"/>
-                        </div>
-                        <div className="space-y-2 col-span-1 md:col-span-2">
-                          <Label htmlFor="agencyName" className="dark:text-gray-300">Agency Name</Label>
-                          <Input
-                            id="agencyName"
-                            placeholder="Enter Agency Name"
-                            className="dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400 dark:border-gray-600"
-                          />
-                        </div>
-                        <div className="space-y-2 col-span-1 md:col-span-2">
-                          <Label htmlFor="agencyAddress" className="dark:text-gray-300">Agency Address</Label>
-                          <Textarea
-                            id="agencyAddress"
-                            placeholder="Enter full agency address"
-                            rows={4}
-                            className="dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400 dark:border-gray-600"
-                          />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* --- KEY PERSON DETAILS --- */}
-                  <Card className="bg-white dark:bg-gray-800">
-                    <CardHeader>
-                      <CardTitle className="dark:text-gray-100">Key Person Details</CardTitle>
-                    </CardHeader>
-                     <CardContent className="space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <Label htmlFor="director" className="dark:text-gray-300">
-                            Proprietor/Partner/Director
-                          </Label>
-                          <Input id="director" placeholder="Enter full name" className="dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400 dark:border-gray-600"/>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="contactNo" className="dark:text-gray-300">Contact No.</Label>
-                          <Input id="contactNo" placeholder="Enter contact" className="dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400 dark:border-gray-600"/>
-                        </div>
-                        <div className="space-y-2 col-span-1 md:col-span-2">
-                          <Label htmlFor="email" className="dark:text-gray-300">Email ID</Label>
-                          <Input
-                            id="email"
-                            type="email"
-                            defaultValue={session.user.email}
-                            placeholder="Enter email address"
-                            className="dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400 dark:border-gray-600"
-                          />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* --- BRANCH DETAILS --- */}
-                  <Card className="bg-white dark:bg-gray-800">
-                    <CardHeader>
-                      <CardTitle className="dark:text-gray-100">Branch Details</CardTitle>
-                      <p className="text-sm text-muted-foreground pt-1 dark:text-gray-400">
-                        Add details for each branch office. Leave blank if none.
-                      </p>
-                    </CardHeader>
-                    <CardContent>
-                      <BranchDetailsManager />
-                    </CardContent>
-                  </Card>
-
-                  <div className="flex justify-end pt-4">
-                    <Button
-                      size="lg"
-                      className="bg-rose-800 hover:bg-rose-900 text-white dark:bg-rose-700 dark:hover:bg-rose-600"
-                    >
-                      Save Agency Details
-                    </Button>
-                  </div>
-                </form>
+                {/* NEW: Replace the static form with the dynamic component */}
+                <AgencyProfileForm />
               </section>
             </TabsContent>
           )}
@@ -360,9 +253,7 @@ export default async function Page() {
 
           {/* === TAB: LOGS (Visible to all) === */}
           <TabsContent value="logs">
-             <EnhancedActivityLogs userId={session.user.id} isOwnProfile={true} />
-             {/* Optional: Add back the session data view if needed for debugging */}
-             {/* <div className="bg-gray-100 rounded-lg p-4 overflow-x-auto text-sm text-gray-700 mt-8 dark:bg-gray-700 dark:text-gray-200"> ... </div> */}
+            <EnhancedActivityLogs userId={session.user.id} isOwnProfile={true} />
           </TabsContent>
         </Tabs>
       </div>
