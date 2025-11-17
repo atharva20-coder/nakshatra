@@ -1,3 +1,4 @@
+// src/lib/date-utils.ts
 "use strict";
 
 export const MONTH_NAMES = {
@@ -93,5 +94,16 @@ export function getMonthYearFromDate(date: Date) {
   return {
     month: MONTH_NAMES[month as MonthNumber],
     year: year.toString()
+  };
+}
+
+// --- NEW FUNCTION TO ADD ---
+/**
+ * Gets the month (number) and year (number) from a Date
+ */
+export function getMonthYearAsNumbers(date: Date) {
+  return {
+    month: date.getMonth() + 1, // 1-12
+    year: date.getFullYear(),
   };
 }

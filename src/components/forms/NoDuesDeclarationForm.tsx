@@ -482,7 +482,7 @@ export const NoDuesDeclarationForm = ({
                           fieldToUpdate="noDuesRowApproval" // This identifies the action
                           cmSessionId={cmSessionId}
                           onApprovalSuccess={handleApprove}
-                          disabled={!isFormEditable || isPending || isRowSaving || row.id.startsWith("new-")}
+                          disabled={!isFormEditable || isPending || row.id.startsWith("new-")}
                           isApproved={false}
                           approvalSignature={undefined}
                         />
