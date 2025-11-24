@@ -68,8 +68,7 @@ export default async function AssignmentReportsPage({ searchParams }: PageProps)
               initialCmAssignments={cmAssignments || []}
               initialAuditReport={audits || []} // --- NEW PROP ---
               initialMonth={month}
-              initialYear={year}
-            />
+              initialYear={year} initialPenalties={[]}            />
           </CardContent>
         </Card>
       </div>
