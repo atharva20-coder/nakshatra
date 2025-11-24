@@ -80,6 +80,7 @@ model User {
   showCauseResponses          ShowCauseResponse[]
   createdAnnouncements        Announcement[]
   readAnnouncements           AnnouncementRead[]
+  observationComments         ObservationComment[]
   // --- END NEW RELATIONS ---
 
   agencyProfile   AgencyProfile?
@@ -985,10 +986,33 @@ model Observation {
   showCauseNotice    ShowCauseNotice?    @relation(fields: [showCauseNoticeId], references: [id], onDelete: SetNull)
   // --- END SCN RELATION ---
 
+  comments           ObservationComment[]
+
   @@map("observations")
   @@index([auditId])
   @@index([status])
   @@index([showCauseNoticeId])
+}
+
+model ObservationComment {
+  id            String      @id @default(uuid())
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  message       String      @db.Text
+  attachmentPath String?
+  attachmentName String?
+  
+  observationId String
+  observation   Observation @relation(fields: [observationId], references: [id], onDelete: Cascade)
+  
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+
+  
+  @@map("observation_comments")
+  @@index([observationId])
+  @@index([userId])
 }
 
 // Penalty model

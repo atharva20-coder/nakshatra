@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { UserRole } from "@/generated/prisma";
 import { ReturnButton } from "@/components/return-button";
-import { getAssignmentReportAction, getAuditReportAction } from "@/actions/reports.action";
+import { getAssignmentReportAction, getAuditReportAction, getPenaltyReportAction } from "@/actions/reports.action";
 import { AssignmentReportClient } from "@/components/reports/assignment-report-client";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -36,12 +36,16 @@ export default async function AdminAssignmentReportsPage({ searchParams }: PageP
   // 2. Fetch audit report data
   const { audits, error: auditError } = await getAuditReportAction({ month, year });
 
-  if (assignmentError || auditError) {
+  // 3. Fetch penalty report data
+  const searchQuery = resolvedSearchParams.search as string | undefined;
+  const { penalties, error: penaltyError } = await getPenaltyReportAction({ month, year, searchQuery });
+
+  if (assignmentError || auditError || penaltyError) {
     return (
       <div className="container mx-auto p-8">
         <ReturnButton href="/admin/dashboard" label="Back to Dashboard" />
         <h1 className="text-2xl font-bold my-4">Error</h1>
-        <p className="text-red-600">{assignmentError || auditError}</p>
+        <p className="text-red-600">{assignmentError || auditError || penaltyError}</p>
       </div>
     );
   }
@@ -67,6 +71,7 @@ export default async function AdminAssignmentReportsPage({ searchParams }: PageP
               initialAuditAssignments={auditAssignments || []}
               initialCmAssignments={cmAssignments || []}
               initialAuditReport={audits || []}
+              initialPenalties={penalties || []}
               initialMonth={month}
               initialYear={year}
             />

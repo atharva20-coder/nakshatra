@@ -2,8 +2,8 @@
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { 
-  UserRole, 
+import {
+  UserRole,
   NotificationType,
   ActivityAction,
   ShowCauseStatus,
@@ -19,10 +19,10 @@ import { getErrorMessage } from "@/lib/utils";
  * Admin: Issue a new Show Cause Notice to an Agency
  */
 export async function issueShowCauseNoticeAction(
-  agencyId: string, 
+  agencyId: string,
   observationIds: string[],
-  subject: string, 
-  details: string, 
+  subject: string,
+  details: string,
   responseDueDate: Date
 ) {
   const headersList = await headers();
@@ -39,7 +39,7 @@ export async function issueShowCauseNoticeAction(
     if (!agency) {
       return { error: "Agency not found." };
     }
-    
+
     if (observationIds.length === 0) {
       return { error: "At least one observation must be selected." };
     }
@@ -150,7 +150,8 @@ export async function getShowCauseNoticeDetailsAction(noticeId: string) {
                   }
                 }
               }
-            }
+            },
+            _count: { select: { comments: true } }
           }
         },
         responses: {
@@ -163,17 +164,17 @@ export async function getShowCauseNoticeDetailsAction(noticeId: string) {
     if (!notice) {
       return { success: false, error: "Notice not found." };
     }
-    
+
     const isAdmin = session.user.role === UserRole.ADMIN || session.user.role === UserRole.SUPER_ADMIN;
     const isOwner = notice.receivedByAgencyId === session.user.id;
-    
+
     if (!isAdmin && !isOwner) {
       return { success: false, error: "Forbidden: You do not have permission to view this notice." };
     }
 
     // --- THIS IS THE FIX ---
     // Return a single `data` object
-    return { success: true, data: { notice, isAdmin } };
+    return { success: true, data: JSON.parse(JSON.stringify({ notice, isAdmin })) };
   } catch (error) {
     return { success: false, error: getErrorMessage(error) };
   }
@@ -189,7 +190,7 @@ export async function closeShowCauseNoticeAction(noticeId: string, adminRemarks:
   if (!session || (session.user.role !== UserRole.ADMIN && session.user.role !== UserRole.SUPER_ADMIN)) {
     return { error: "Forbidden: Admin access required." };
   }
-  
+
   try {
     const notice = await prisma.showCauseNotice.update({
       where: { id: noticeId },
@@ -219,7 +220,7 @@ export async function closeShowCauseNoticeAction(noticeId: string, adminRemarks:
 
     revalidatePath(`/admin/show-cause/${noticeId}`);
     revalidatePath(`/user/show-cause/${noticeId}`);
-    
+
     return { success: true, data: notice, notice };
   } catch (error) {
     return { error: getErrorMessage(error) };

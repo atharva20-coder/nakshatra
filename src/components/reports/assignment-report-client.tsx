@@ -16,16 +16,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 // Import the new tab component
 import { AuditReportTab } from './audit-report-tab'; 
+import { PenaltyReportTab } from './penalty-report-tab';
 import type { 
   AuditAssignmentReportItem, 
   CmAssignmentReportItem,
-  AuditReportItem // Import the new type
+  AuditReportItem,
+  PenaltyReportItem
 } from '@/actions/reports.action';
 
 interface ReportClientProps {
   initialAuditAssignments: AuditAssignmentReportItem[];
   initialCmAssignments: CmAssignmentReportItem[];
-  initialAuditReport: AuditReportItem[]; // Add new prop
+  initialAuditReport: AuditReportItem[];
+  initialPenalties: PenaltyReportItem[];
   initialMonth: number;
   initialYear: number;
 }
@@ -43,7 +46,8 @@ const yearOptions = Array.from({ length: 5 }, (_, i) => {
 export function AssignmentReportClient({
   initialAuditAssignments,
   initialCmAssignments,
-  initialAuditReport, // Destructure new prop
+  initialAuditReport,
+  initialPenalties,
   initialMonth,
   initialYear
 }: ReportClientProps) {
@@ -54,11 +58,30 @@ export function AssignmentReportClient({
 
   const [month, setMonth] = useState(String(initialMonth));
   const [year, setYear] = useState(String(initialYear));
+  const [penaltySearch, setPenaltySearch] = useState("");
 
   const handleFilterChange = () => {
     const params = new URLSearchParams(searchParams.toString());
     params.set('month', month);
     params.set('year', year);
+    if (penaltySearch) {
+      params.set('search', penaltySearch);
+    } else {
+      params.delete('search');
+    }
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  const handlePenaltySearch = (query: string) => {
+    setPenaltySearch(query);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('month', month);
+    params.set('year', year);
+    if (query) {
+      params.set('search', query);
+    } else {
+      params.delete('search');
+    }
     router.push(`${pathname}?${params.toString()}`);
   };
 
@@ -121,10 +144,11 @@ export function AssignmentReportClient({
       {/* 2. Tabs and Tables */}
       <Tabs defaultValue="audit-firm">
         {/* --- MODIFICATION: Added new tab --- */}
-        <TabsList className="grid w-full grid-cols-3 max-w-lg">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="audit-firm">Audit Firm Assignments ({initialAuditAssignments.length})</TabsTrigger>
           <TabsTrigger value="cm">CM Assignments ({initialCmAssignments.length})</TabsTrigger>
           <TabsTrigger value="audits">Audits & Scorecards ({initialAuditReport.length})</TabsTrigger>
+          <TabsTrigger value="penalties">Penalties ({initialPenalties.length})</TabsTrigger>
         </TabsList>
         {/* --- END MODIFICATION --- */}
         
@@ -217,6 +241,11 @@ export function AssignmentReportClient({
           <AuditReportTab audits={initialAuditReport} />
         </TabsContent>
         {/* --- END NEW TAB CONTENT --- */}
+        
+        {/* Penalties Tab */}
+        <TabsContent value="penalties">
+          <PenaltyReportTab penalties={initialPenalties} onSearch={handlePenaltySearch} />
+        </TabsContent>
       </Tabs>
     </div>
   );

@@ -205,3 +205,106 @@ export async function getAuditReportAction(
   }
 }
 // --- END NEW ACTION ---
+
+// --- PENALTY REPORT ---
+export interface PenaltyReportItem {
+  id: string;
+  agencyName: string;
+  vemId: string | null;
+  observationNumber: string;
+  penaltyAmount: number;
+  penaltyReason: string;
+  deductionMonth: string;
+  status: string;
+  assignedAt: Date;
+}
+
+/**
+ * Admin/Super Admin: Get all penalties for a specific month with optional search
+ */
+export async function getPenaltyReportAction(
+  { month, year, searchQuery }: { month: number; year: number; searchQuery?: string }
+) {
+  const headersList = await headers();
+  const session = await auth.api.getSession({ headers: headersList });
+
+  if (!session || (session.user.role !== UserRole.ADMIN && session.user.role !== UserRole.SUPER_ADMIN)) {
+    return { error: "Forbidden" };
+  }
+
+  try {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59);
+
+    const penalties = await prisma.penalty.findMany({
+      where: {
+        assignedAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+        ...(searchQuery ? {
+          OR: [
+            {
+              agency: {
+                name: {
+                  contains: searchQuery,
+                  mode: 'insensitive'
+                }
+              }
+            },
+            {
+              agency: {
+                agencyProfile: {
+                  vemId: {
+                    contains: searchQuery,
+                    mode: 'insensitive'
+                  }
+                }
+              }
+            }
+          ]
+        } : {})
+      },
+      include: {
+        agency: {
+          select: {
+            name: true,
+            agencyProfile: {
+              select: {
+                vemId: true
+              }
+            }
+          }
+        },
+        observation: {
+          select: {
+            observationNumber: true
+          }
+        }
+      },
+      orderBy: { assignedAt: 'desc' },
+    });
+
+    const formattedPenalties: PenaltyReportItem[] = penalties.map(penalty => ({
+      id: penalty.id,
+      agencyName: penalty.agency.name,
+      vemId: penalty.agency.agencyProfile?.vemId || null,
+      observationNumber: penalty.observation?.observationNumber || 'N/A',
+      penaltyAmount: Number(penalty.penaltyAmount),
+      penaltyReason: penalty.penaltyReason,
+      deductionMonth: penalty.deductionMonth,
+      status: penalty.status,
+      assignedAt: penalty.assignedAt,
+    }));
+
+    return { success: true, penalties: formattedPenalties };
+
+  } catch (error) {
+    console.error("Error fetching penalty report:", error);
+    return { 
+      error: getErrorMessage(error),
+      penalties: []
+    };
+  }
+}
+// --- END PENALTY REPORT ---

@@ -32,7 +32,7 @@ export async function getAuditingFirmsSummaryAction() {
     });
     return { success: true, firms };
   } catch (error) {
-     console.error("Error fetching auditing firms summary:", error);
+    console.error("Error fetching auditing firms summary:", error);
     return { error: "Failed to fetch auditing firm data." };
   }
 }
@@ -42,98 +42,98 @@ export async function getAuditingFirmsSummaryAction() {
  * Super Admin: Get all agencies and their assignment status for a specific firm.
  */
 export async function getFirmAssignmentDetailsAction(firmId: string) {
-    const headersList = await headers();
-    const session = await auth.api.getSession({ headers: headersList });
+  const headersList = await headers();
+  const session = await auth.api.getSession({ headers: headersList });
 
-    if (!session || session.user.role !== UserRole.SUPER_ADMIN) {
-        return { error: "Forbidden" };
+  if (!session || session.user.role !== UserRole.SUPER_ADMIN) {
+    return { error: "Forbidden" };
+  }
+  try {
+    const firm = await prisma.auditingFirm.findUnique({
+      where: { id: firmId },
+    });
+
+    if (!firm) {
+      return { error: "Auditing firm not found." };
     }
-    try {
-        const firm = await prisma.auditingFirm.findUnique({
-            where: { id: firmId },
-        });
 
-        if (!firm) {
-            return { error: "Auditing firm not found." };
-        }
+    const allAgencies = await prisma.user.findMany({
+      where: { role: UserRole.USER },
+      select: { id: true, name: true, email: true },
+      orderBy: { name: 'asc' },
+    });
 
-        const allAgencies = await prisma.user.findMany({
-            where: { role: UserRole.USER },
-            select: { id: true, name: true, email: true },
-            orderBy: { name: 'asc' },
-        });
+    const allAssignments = await prisma.agencyAssignment.findMany({
+      where: { isActive: true },
+      include: { firm: { select: { name: true } } },
+    });
 
-        const allAssignments = await prisma.agencyAssignment.findMany({
-            where: { isActive: true },
-            include: { firm: { select: { name: true } } },
-        });
+    const agenciesWithStatus = allAgencies.map(agency => {
+      const assignment = allAssignments.find(a => a.agencyId === agency.id);
+      return {
+        ...agency,
+        isAssigned: !!assignment,
+        isAssignedToCurrentFirm: assignment?.firmId === firmId,
+        assignedFirmName: assignment?.firm.name ?? null,
+      };
+    });
 
-        const agenciesWithStatus = allAgencies.map(agency => {
-            const assignment = allAssignments.find(a => a.agencyId === agency.id);
-            return {
-                ...agency,
-                isAssigned: !!assignment,
-                isAssignedToCurrentFirm: assignment?.firmId === firmId,
-                assignedFirmName: assignment?.firm.name ?? null,
-            };
-        });
-
-        return { success: true, firm, agencies: agenciesWithStatus };
-    } catch (error) {
-        console.error(`Error fetching assignment details for firm ${firmId}:`, error);
-        return { error: "Failed to fetch assignment details." };
-    }
+    return { success: true, firm, agencies: agenciesWithStatus };
+  } catch (error) {
+    console.error(`Error fetching assignment details for firm ${firmId}:`, error);
+    return { error: "Failed to fetch assignment details." };
+  }
 }
 
 /**
  * Super Admin: Update assignments for a specific firm.
  */
 export async function updateFirmAssignmentsAction(firmId: string, assignedAgencyIds: string[], unassignedAgencyIds: string[]) {
-    const headersList = await headers();
-    const session = await auth.api.getSession({ headers: headersList });
+  const headersList = await headers();
+  const session = await auth.api.getSession({ headers: headersList });
 
-    if (!session || session.user.role !== UserRole.SUPER_ADMIN) {
-        return { error: "Forbidden" };
-    }
+  if (!session || session.user.role !== UserRole.SUPER_ADMIN) {
+    return { error: "Forbidden" };
+  }
 
-    try {
-        await prisma.$transaction(async (tx) => {
-            // Deactivate assignments for agencies that were unchecked
-            if (unassignedAgencyIds.length > 0) {
-                await tx.agencyAssignment.updateMany({
-                    where: {
-                        firmId: firmId,
-                        agencyId: { in: unassignedAgencyIds },
-                    },
-                    data: { isActive: false },
-                });
-            }
-
-            // Create or update assignments for agencies that were checked
-            if (assignedAgencyIds.length > 0) {
-                for (const agencyId of assignedAgencyIds) {
-                    await tx.agencyAssignment.upsert({
-                        where: { agencyId_firmId: { agencyId, firmId } },
-                        update: { isActive: true, assignedBy: session.user.id },
-                        create: {
-                            agencyId,
-                            firmId,
-                            assignedBy: session.user.id,
-                            isActive: true,
-                        },
-                    });
-                }
-            }
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Deactivate assignments for agencies that were unchecked
+      if (unassignedAgencyIds.length > 0) {
+        await tx.agencyAssignment.updateMany({
+          where: {
+            firmId: firmId,
+            agencyId: { in: unassignedAgencyIds },
+          },
+          data: { isActive: false },
         });
-        
-        revalidatePath('/super/audits');
-        revalidatePath(`/super/audits/assign/${firmId}`);
+      }
 
-        return { success: true };
-    } catch (error) {
-        console.error(`Error updating assignments for firm ${firmId}:`, error);
-        return { error: "Failed to update assignments." };
-    }
+      // Create or update assignments for agencies that were checked
+      if (assignedAgencyIds.length > 0) {
+        for (const agencyId of assignedAgencyIds) {
+          await tx.agencyAssignment.upsert({
+            where: { agencyId_firmId: { agencyId, firmId } },
+            update: { isActive: true, assignedBy: session.user.id },
+            create: {
+              agencyId,
+              firmId,
+              assignedBy: session.user.id,
+              isActive: true,
+            },
+          });
+        }
+      }
+    });
+
+    revalidatePath('/super/audits');
+    revalidatePath(`/super/audits/assign/${firmId}`);
+
+    return { success: true };
+  } catch (error) {
+    console.error(`Error updating assignments for firm ${firmId}:`, error);
+    return { error: "Failed to update assignments." };
+  }
 }
 
 
@@ -164,11 +164,11 @@ export async function assignAgencyToFirmAction(agencyId: string, firmId: string)
 
     // Log activity
     await logFormActivityAction({
-        action: ActivityAction.AGENCY_ASSIGNED_TO_FIRM,
-        entityType: 'agencyAssignment',
-        description: `Assigned agency ${assignment.agency.name} to firm ${assignment.firm.name}`,
-        entityId: assignment.id,
-        metadata: { agencyId, firmId }
+      action: ActivityAction.AGENCY_ASSIGNED_TO_FIRM,
+      entityType: 'agencyAssignment',
+      description: `Assigned agency ${assignment.agency.name} to firm ${assignment.firm.name}`,
+      entityId: assignment.id,
+      metadata: { agencyId, firmId }
     });
 
     // Notify agency
@@ -188,10 +188,10 @@ export async function assignAgencyToFirmAction(agencyId: string, firmId: string)
     console.error("Error assigning agency:", error);
     // Handle potential unique constraint violation
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        return { error: "This agency is already assigned to this firm." };
+      return { error: "This agency is already assigned to this firm." };
     }
     if (error instanceof Error) {
-        return { error: `Failed to assign agency to firm: ${error.message}` };
+      return { error: `Failed to assign agency to firm: ${error.message}` };
     }
     return { error: "Failed to assign agency to firm due to an unknown error." };
   }
@@ -244,8 +244,8 @@ export async function getAssignedAgenciesAction() {
     return { success: true, assignments, firm: auditor.firm };
   } catch (error: unknown) { // Use unknown
     console.error("Error fetching assigned agencies:", error);
-     if (error instanceof Error) {
-        return { error: `Failed to fetch assigned agencies: ${error.message}` };
+    if (error instanceof Error) {
+      return { error: `Failed to fetch assigned agencies: ${error.message}` };
     }
     return { error: "Failed to fetch assigned agencies due to an unknown error." };
   }
@@ -274,19 +274,19 @@ export async function getAssignmentDataAction() {
 
     // Also fetch existing assignments to display them
     const existingAssignments = await prisma.agencyAssignment.findMany({
-       where: { isActive: true }, // Or fetch all if you want to show inactive ones too
-       include: {
-           agency: { select: { name: true } },
-           firm: { select: { name: true } }
-       },
-       orderBy: { createdAt: 'desc'}
+      where: { isActive: true }, // Or fetch all if you want to show inactive ones too
+      include: {
+        agency: { select: { name: true } },
+        firm: { select: { name: true } }
+      },
+      orderBy: { createdAt: 'desc' }
     });
 
     return { success: true, agencies, firms, existingAssignments };
   } catch (error: unknown) {
     console.error("Error fetching assignment data:", error);
     if (error instanceof Error) {
-        return { error: `Failed to fetch assignment data: ${error.message}` };
+      return { error: `Failed to fetch assignment data: ${error.message}` };
     }
     return { error: "Failed to fetch data for assignment page due to an unknown error." };
   }
@@ -366,8 +366,8 @@ export async function createAuditAction(data: {
     return { success: true, audit };
   } catch (error: unknown) { // Use unknown
     console.error("Error creating audit:", error);
-     if (error instanceof Error) {
-        return { error: `Failed to create audit: ${error.message}` };
+    if (error instanceof Error) {
+      return { error: `Failed to create audit: ${error.message}` };
     }
     return { error: "Failed to create audit. Please check input data." };
   }
@@ -393,17 +393,17 @@ export async function addObservationAction(data: {
 
   try {
     const audit = await prisma.audit.findUnique({
-        where: { id: data.auditId },
-        include: { firm: true, agency: { select: { name: true } } }
+      where: { id: data.auditId },
+      include: { firm: true, agency: { select: { name: true } } }
     });
 
     if (!audit) {
-        return { error: "Audit not found." };
+      return { error: "Audit not found." };
     }
 
     const auditor = await prisma.auditor.findUnique({ where: { userId: session.user.id } });
     if (!auditor || auditor.firmId !== audit.firmId) {
-        return { error: "Forbidden: You are not assigned to this audit's firm." };
+      return { error: "Forbidden: You are not assigned to this audit's firm." };
     }
 
     const observation = await prisma.observation.create({
@@ -420,11 +420,11 @@ export async function addObservationAction(data: {
     });
 
     await logFormActivityAction({
-        action: ActivityAction.OBSERVATION_ADDED,
-        entityType: 'observation',
-        description: `Added observation ${data.observationNumber} to audit ${audit.id} for agency ${audit.agency.name}`,
-        entityId: observation.id,
-        metadata: { auditId: data.auditId, observationNumber: data.observationNumber, severity: data.severity }
+      action: ActivityAction.OBSERVATION_ADDED,
+      entityType: 'observation',
+      description: `Added observation ${data.observationNumber} to audit ${audit.id} for agency ${audit.agency.name}`,
+      entityId: observation.id,
+      metadata: { auditId: data.auditId, observationNumber: data.observationNumber, severity: data.severity }
     });
 
     const admins = await prisma.user.findMany({
@@ -449,10 +449,10 @@ export async function addObservationAction(data: {
   } catch (error: unknown) { // Use unknown
     console.error("Error adding observation:", error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        return { error: "Observation number already exists for this audit." };
+      return { error: "Observation number already exists for this audit." };
     }
-     if (error instanceof Error) {
-        return { error: `Failed to add observation: ${error.message}` };
+    if (error instanceof Error) {
+      return { error: `Failed to add observation: ${error.message}` };
     }
     return { error: "Failed to add observation due to an unknown error." };
   }
@@ -543,27 +543,27 @@ export async function respondToObservationAction(
     if (!observation || observation.audit.agencyId !== session.user.id) {
       return { error: "Observation not found or access denied" };
     }
-    
+
     // Can only respond if status is SENT_TO_AGENCY
     if (observation.status !== ObservationStatus.SENT_TO_AGENCY) {
       if (observation.status === ObservationStatus.AGENCY_ACCEPTED || observation.status === ObservationStatus.AGENCY_DISPUTED) {
-         return { error: "You have already responded to this observation." };
+        return { error: "You have already responded to this observation." };
       }
       return { error: "Observation cannot be responded to at this time." };
     }
-    
+
     if (observation.responseDeadline && new Date() > observation.responseDeadline) {
       return { error: "Response deadline has passed." };
     }
 
     // Validation: If denying, require response text
     if (!accepted && !response?.trim()) {
-        return { error: "A response remark is required when disputing an observation." };
+      return { error: "A response remark is required when disputing an observation." };
     }
 
     // Validation: If evidence is required and they're disputing, they must upload
     if (!accepted && observation.evidenceRequired && !evidencePath) {
-        return { error: "Evidence is required to dispute this observation." };
+      return { error: "Evidence is required to dispute this observation." };
     }
 
     const newStatus = accepted ? ObservationStatus.AGENCY_ACCEPTED : ObservationStatus.AGENCY_DISPUTED;
@@ -579,11 +579,11 @@ export async function respondToObservationAction(
         status: newStatus,
       },
     });
-    
+
     // Check if all observations in this SCN are now answered
     if (updatedObservation.showCauseNoticeId) {
       const noticeId = updatedObservation.showCauseNoticeId;
-      
+
       const pendingObservations = await prisma.observation.count({
         where: {
           showCauseNoticeId: noticeId,
@@ -603,7 +603,7 @@ export async function respondToObservationAction(
           where: { role: { in: [UserRole.ADMIN, UserRole.SUPER_ADMIN] } },
           select: { id: true },
         });
-        
+
         for (const admin of admins) {
           await createNotificationAction(
             admin.id,
@@ -618,18 +618,18 @@ export async function respondToObservationAction(
       }
     }
 
-     await logFormActivityAction({
-        action: ActivityAction.OBSERVATION_RESPONDED,
-        entityType: 'observation',
-        description: `Agency responded to observation ${observation.observationNumber}: ${accepted ? 'Accepted' : 'Disputed'}`,
-        entityId: observation.id,
-        metadata: { 
-          auditId: observation.auditId, 
-          accepted, 
-          responseProvided: !!response, 
-          evidenceSubmitted: !!evidencePath,
-          evidencePath: evidencePath || undefined
-        }
+    await logFormActivityAction({
+      action: ActivityAction.OBSERVATION_RESPONDED,
+      entityType: 'observation',
+      description: `Agency responded to observation ${observation.observationNumber}: ${accepted ? 'Accepted' : 'Disputed'}`,
+      entityId: observation.id,
+      metadata: {
+        auditId: observation.auditId,
+        accepted,
+        responseProvided: !!response,
+        evidenceSubmitted: !!evidencePath,
+        evidencePath: evidencePath || undefined
+      }
     });
 
     // Notify admins (generic notification for individual observation response)
@@ -662,8 +662,8 @@ export async function respondToObservationAction(
     return { success: true, observation: updatedObservation };
   } catch (error: unknown) {
     console.error("Error responding to observation:", error);
-     if (error instanceof Error) {
-        return { error: `Failed to submit response: ${error.message}` };
+    if (error instanceof Error) {
+      return { error: `Failed to submit response: ${error.message}` };
     }
     return { error: "Failed to submit response due to an unknown error." };
   }
@@ -692,7 +692,7 @@ export async function assignPenaltyAction(data: {
   try {
     const observation = await prisma.observation.findUnique({
       where: { id: data.observationId },
-      include: { 
+      include: {
         audit: true,
         showCauseNotice: true // Include SCN to get its ID
       },
@@ -703,75 +703,75 @@ export async function assignPenaltyAction(data: {
     }
 
     // Can assign penalty to accepted, disputed, or auto-accepted observations
-    if (observation.status !== ObservationStatus.AGENCY_ACCEPTED && 
-        observation.status !== ObservationStatus.AUTO_ACCEPTED && 
-        observation.status !== ObservationStatus.AGENCY_DISPUTED) {
+    if (observation.status !== ObservationStatus.AGENCY_ACCEPTED &&
+      observation.status !== ObservationStatus.AUTO_ACCEPTED &&
+      observation.status !== ObservationStatus.AGENCY_DISPUTED) {
       return { error: "Penalty can only be assigned to accepted, auto-accepted, or disputed observations." };
     }
 
     if (observation.penaltyAssigned || observation.penaltyId) {
-        return { error: "Penalty has already been assigned to this observation" };
+      return { error: "Penalty has already been assigned to this observation" };
     }
 
     const result = await prisma.$transaction(async (tx) => {
-        // Generate proper notice reference - CRITICAL: Store full SCN ID
-        let noticeRef: string;
-        if (observation.showCauseNoticeId) {
-          // Use the full SCN ID (UUID) as the reference
-          noticeRef = observation.showCauseNoticeId;
-        } else {
-          // Fallback for observations without SCN (legacy/direct observations)
-          noticeRef = `OBS-${observation.id.slice(0, 8)}`;
-        }
+      // Generate proper notice reference - CRITICAL: Store full SCN ID
+      let noticeRef: string;
+      if (observation.showCauseNoticeId) {
+        // Use the full SCN ID (UUID) as the reference
+        noticeRef = observation.showCauseNoticeId;
+      } else {
+        // Fallback for observations without SCN (legacy/direct observations)
+        noticeRef = `OBS-${observation.id.slice(0, 8)}`;
+      }
 
-        const penalty = await tx.penalty.create({
-            data: {
-                observationId: data.observationId,
-                agencyId: observation.audit.agencyId,
-                penaltyAmount: data.penaltyAmount,
-                penaltyReason: data.penaltyReason,
-                deductionMonth: data.deductionMonth,
-                correctiveAction: data.correctiveAction,
-                assignedBy: session.user.id,
-                status: PenaltyStatus.SUBMITTED, // Make it immediately visible
-                assignedAt: new Date(),
-                submittedAt: new Date(), // Auto-submit so agency sees it immediately
-                noticeRefNo: noticeRef, // CRITICAL: Full UUID for hyperlink
-            },
-        });
+      const penalty = await tx.penalty.create({
+        data: {
+          observationId: data.observationId,
+          agencyId: observation.audit.agencyId,
+          penaltyAmount: data.penaltyAmount,
+          penaltyReason: data.penaltyReason,
+          deductionMonth: data.deductionMonth,
+          correctiveAction: data.correctiveAction,
+          assignedBy: session.user.id,
+          status: PenaltyStatus.SUBMITTED, // Make it immediately visible
+          assignedAt: new Date(),
+          submittedAt: new Date(), // Auto-submit so agency sees it immediately
+          noticeRefNo: noticeRef, // CRITICAL: Full UUID for hyperlink
+        },
+      });
 
-        const updatedObservation = await tx.observation.update({
-            where: { id: data.observationId },
-            data: {
-                penaltyAssigned: true,
-                penaltyId: penalty.id,
-                status: ObservationStatus.CLOSED, // Final status
-            },
-        });
+      const updatedObservation = await tx.observation.update({
+        where: { id: data.observationId },
+        data: {
+          penaltyAssigned: true,
+          penaltyId: penalty.id,
+          status: ObservationStatus.CLOSED, // Final status
+        },
+      });
 
-        return { penalty, updatedObservation };
+      return { penalty, updatedObservation };
     });
 
     await logFormActivityAction({
-        action: ActivityAction.PENALTY_ASSIGNED,
-        entityType: 'penalty',
-        description: `Penalty of ₹${result.penalty.penaltyAmount} assigned to observation ${observation.observationNumber}`,
-        entityId: result.penalty.id,
-        metadata: { 
-          auditId: observation.auditId, 
-          observationId: observation.id, 
-          amount: data.penaltyAmount,
-          scnId: observation.showCauseNoticeId 
-        },
+      action: ActivityAction.PENALTY_ASSIGNED,
+      entityType: 'penalty',
+      description: `Penalty of ₹${result.penalty.penaltyAmount} assigned to observation ${observation.observationNumber}`,
+      entityId: result.penalty.id,
+      metadata: {
+        auditId: observation.auditId,
+        observationId: observation.id,
+        amount: data.penaltyAmount,
+        scnId: observation.showCauseNoticeId
+      },
     });
-    
+
     // Notify agency with link to Penalty Matrix
     await createNotificationAction(
-        observation.audit.agencyId,
-        NotificationType.SYSTEM_ALERT,
-        "Penalty Assigned",
-        `A penalty of ₹${data.penaltyAmount} has been assigned for observation ${observation.observationNumber}. View it in your Penalty Matrix.`,
-        `/user/forms/penaltyMatrix`
+      observation.audit.agencyId,
+      NotificationType.SYSTEM_ALERT,
+      "Penalty Assigned",
+      `A penalty of ₹${data.penaltyAmount} has been assigned for observation ${observation.observationNumber}. View it in your Penalty Matrix.`,
+      `/user/forms/penaltyMatrix`
     );
 
     // Revalidate all relevant paths
@@ -786,7 +786,7 @@ export async function assignPenaltyAction(data: {
   } catch (error: unknown) {
     console.error("Error assigning penalty:", error);
     if (error instanceof Error) {
-        return { error: `Failed to assign penalty: ${error.message}` };
+      return { error: `Failed to assign penalty: ${error.message}` };
     }
     return { error: "Failed to assign penalty due to an unknown error." };
   }
@@ -813,27 +813,27 @@ export async function submitPenaltyAction(penaltyId: string) {
       },
       include: {
         agency: { select: { id: true, name: true } },
-         observation: { select: { observationNumber: true } } // Include observation number
+        observation: { select: { observationNumber: true } } // Include observation number
       },
     });
 
     if (!penalty) {
-        return { error: "Penalty not found or already submitted." };
+      return { error: "Penalty not found or already submitted." };
     }
 
-     await logFormActivityAction({
-        action: ActivityAction.PENALTY_SUBMITTED,
-        entityType: 'penalty',
-        description: `Submitted penalty (ID: ${penaltyId}) for agency ${penalty.agency.name}`,
-        entityId: penaltyId,
-        metadata: { agencyId: penalty.agencyId, amount: penalty.penaltyAmount }
+    await logFormActivityAction({
+      action: ActivityAction.PENALTY_SUBMITTED,
+      entityType: 'penalty',
+      description: `Submitted penalty (ID: ${penaltyId}) for agency ${penalty.agency.name}`,
+      entityId: penaltyId,
+      metadata: { agencyId: penalty.agencyId, amount: penalty.penaltyAmount }
     });
 
     await createNotificationAction(
       penalty.agencyId,
       NotificationType.SYSTEM_ALERT,
       "Penalty Issued",
-       // Use observation number in message
+      // Use observation number in message
       `A penalty of ₹${penalty.penaltyAmount} has been issued for observation ${penalty.observation?.observationNumber ?? penalty.observationId}. Details available in Penalty Matrix.`,
       "/user/penalty-matrix"
     );
@@ -845,8 +845,8 @@ export async function submitPenaltyAction(penaltyId: string) {
     return { success: true, penalty };
   } catch (error: unknown) { // Use unknown
     console.error("Error submitting penalty:", error);
-     if (error instanceof Error) {
-        return { error: `Failed to submit penalty: ${error.message}` };
+    if (error instanceof Error) {
+      return { error: `Failed to submit penalty: ${error.message}` };
     }
     return { error: "Failed to submit penalty due to an unknown error." };
   }
@@ -878,15 +878,15 @@ export async function getObservationsForAdminAction(filters?: {
     if (filters?.status) where.status = filters.status;
     if (filters?.severity) where.severity = filters.severity;
     if (filters?.auditId) {
-        where.auditId = filters.auditId;
+      where.auditId = filters.auditId;
     } else {
-        const auditWhere: Prisma.AuditWhereInput = {};
-        if (filters?.agencyId) auditWhere.agencyId = filters.agencyId;
-        if (filters?.firmId) auditWhere.firmId = filters.firmId;
-        // Only add the audit relation filter if agencyId or firmId is present
-        if (filters?.agencyId || filters?.firmId) {
-             where.audit = auditWhere;
-        }
+      const auditWhere: Prisma.AuditWhereInput = {};
+      if (filters?.agencyId) auditWhere.agencyId = filters.agencyId;
+      if (filters?.firmId) auditWhere.firmId = filters.firmId;
+      // Only add the audit relation filter if agencyId or firmId is present
+      if (filters?.agencyId || filters?.firmId) {
+        where.audit = auditWhere;
+      }
     }
 
     const observations = await prisma.observation.findMany({
@@ -912,8 +912,8 @@ export async function getObservationsForAdminAction(filters?: {
     return { success: true, observations };
   } catch (error: unknown) { // Use unknown
     console.error("Error fetching observations for admin:", error);
-     if (error instanceof Error) {
-        return { error: `Failed to fetch observations: ${error.message}` };
+    if (error instanceof Error) {
+      return { error: `Failed to fetch observations: ${error.message}` };
     }
     return { error: "Failed to fetch observations due to an unknown error." };
   }
@@ -940,8 +940,8 @@ export async function getObservationsForAgencyAction() {
         audit: {
           include: {
             firm: { select: { name: true } },
-             // Select auditorName directly from Audit model
-             auditor: { select: { user: { select: { name: true } } } }, // Get auditor's user name if needed
+            // Select auditorName directly from Audit model
+            auditor: { select: { user: { select: { name: true } } } }, // Get auditor's user name if needed
           },
         },
         penalty: {
@@ -955,19 +955,19 @@ export async function getObservationsForAgencyAction() {
 
     // Map audit data to include the correct auditor name
     const formattedObservations = observations.map(obs => ({
-        ...obs,
-        audit: {
-            ...obs.audit,
-            auditorName: obs.audit.auditorName // Use the name stored on the Audit record
-        }
+      ...obs,
+      audit: {
+        ...obs.audit,
+        auditorName: obs.audit.auditorName // Use the name stored on the Audit record
+      }
     }));
 
 
     return { success: true, observations: formattedObservations };
   } catch (error: unknown) { // Use unknown
     console.error("Error fetching observations for agency:", error);
-     if (error instanceof Error) {
-        return { error: `Failed to fetch observations: ${error.message}` };
+    if (error instanceof Error) {
+      return { error: `Failed to fetch observations: ${error.message}` };
     }
     return { error: "Failed to fetch observations due to an unknown error." };
   }
@@ -1001,9 +1001,9 @@ export async function getPenaltiesForAgencyAction() {
             description: true,
             audit: {
               select: {
-                  auditDate: true,
-                  auditorName: true,
-                  firm: { select: { name: true } }
+                auditDate: true,
+                auditorName: true,
+                firm: { select: { name: true } }
               }
             }
           }
@@ -1015,8 +1015,8 @@ export async function getPenaltiesForAgencyAction() {
     return { success: true, penalties };
   } catch (error: unknown) {
     console.error("Error fetching penalties for agency:", error);
-     if (error instanceof Error) {
-        return { error: `Failed to fetch penalties: ${error.message}` };
+    if (error instanceof Error) {
+      return { error: `Failed to fetch penalties: ${error.message}` };
     }
     return { error: "Failed to fetch penalties due to an unknown error." };
   }
@@ -1035,9 +1035,9 @@ export async function autoAcceptOverdueObservationsAction() {
         responseDeadline: { lt: now },
         agencyAccepted: null,
       },
-       include: {
-           audit: { include: { agency: { select: { id: true, name: true } } } }
-       }
+      include: {
+        audit: { include: { agency: { select: { id: true, name: true } } } }
+      }
     });
 
     let count = 0;
@@ -1053,13 +1053,13 @@ export async function autoAcceptOverdueObservationsAction() {
       });
       count++;
 
-        await logFormActivityAction({
-            action: ActivityAction.OBSERVATION_RESPONDED,
-            entityType: 'observation',
-            description: `Observation ${observation.observationNumber} for ${observation.audit.agency.name} was auto-accepted`,
-            entityId: observation.id,
-            metadata: { auditId: observation.auditId, autoAccepted: true }
-        });
+      await logFormActivityAction({
+        action: ActivityAction.OBSERVATION_RESPONDED,
+        entityType: 'observation',
+        description: `Observation ${observation.observationNumber} for ${observation.audit.agency.name} was auto-accepted`,
+        entityId: observation.id,
+        metadata: { auditId: observation.auditId, autoAccepted: true }
+      });
 
       const admins = await prisma.user.findMany({
         where: { role: { in: [UserRole.ADMIN, UserRole.SUPER_ADMIN] } },
@@ -1076,21 +1076,21 @@ export async function autoAcceptOverdueObservationsAction() {
         );
       }
 
-        await createNotificationAction(
-            observation.audit.agencyId,
-            NotificationType.SYSTEM_ALERT,
-            "Observation Auto-Accepted",
-            `Observation ${observation.observationNumber} was automatically accepted as the response deadline passed.`,
-            `/user/observations/${observation.id}`
-        );
+      await createNotificationAction(
+        observation.audit.agencyId,
+        NotificationType.SYSTEM_ALERT,
+        "Observation Auto-Accepted",
+        `Observation ${observation.observationNumber} was automatically accepted as the response deadline passed.`,
+        `/user/observations/${observation.id}`
+      );
     }
 
     console.log(`Auto-accepted ${count} overdue observations.`);
     return { success: true, count };
   } catch (error: unknown) { // Use unknown
     console.error("Error during auto-acceptance of observations:", error);
-     if (error instanceof Error) {
-        return { error: `Failed to auto-accept observations: ${error.message}` };
+    if (error instanceof Error) {
+      return { error: `Failed to auto-accept observations: ${error.message}` };
     }
     return { error: "Failed to auto-accept overdue observations due to an unknown error." };
   }
@@ -1100,47 +1100,47 @@ export async function autoAcceptOverdueObservationsAction() {
  * Get Audit details for Auditor/Admin view
  */
 export async function getAuditDetailsAction(auditId: string) {
-    const headersList = await headers();
-    const session = await auth.api.getSession({ headers: headersList });
+  const headersList = await headers();
+  const session = await auth.api.getSession({ headers: headersList });
 
-    if (!session || (session.user.role !== UserRole.AUDITOR && session.user.role !== UserRole.ADMIN && session.user.role !== UserRole.SUPER_ADMIN)) {
-        return { error: "Forbidden" };
+  if (!session || (session.user.role !== UserRole.AUDITOR && session.user.role !== UserRole.ADMIN && session.user.role !== UserRole.SUPER_ADMIN)) {
+    return { error: "Forbidden" };
+  }
+
+  try {
+    const audit = await prisma.audit.findUnique({
+      where: { id: auditId },
+      include: {
+        agency: { select: { id: true, name: true, email: true } },
+        firm: { select: { name: true } },
+        auditor: { include: { user: { select: { name: true } } } },
+        observations: {
+          orderBy: { createdAt: 'asc' },
+          include: { penalty: true }
+        }
+      }
+    });
+
+    if (!audit) {
+      return { error: "Audit not found" };
     }
 
-    try {
-        const audit = await prisma.audit.findUnique({
-            where: { id: auditId },
-            include: {
-                agency: { select: { id: true, name: true, email: true } },
-                firm: { select: { name: true } },
-                auditor: { include: { user: { select: { name: true } } } },
-                observations: {
-                    orderBy: { createdAt: 'asc' },
-                    include: { penalty: true }
-                }
-            }
-        });
-
-        if (!audit) {
-            return { error: "Audit not found" };
-        }
-
-        if (session.user.role === UserRole.AUDITOR) {
-            const auditorProfile = await prisma.auditor.findUnique({ where: { userId: session.user.id } });
-            if (!auditorProfile || auditorProfile.firmId !== audit.firmId) {
-                return { error: "Forbidden: You do not have access to this audit." };
-            }
-        }
-
-        return { success: true, audit };
-
-    } catch (error: unknown) {
-        console.error("Error fetching audit details:", error);
-         if (error instanceof Error) {
-            return { error: `Failed to fetch audit details: ${error.message}` };
-        }
-        return { error: "Failed to fetch audit details due to an unknown error." };
+    if (session.user.role === UserRole.AUDITOR) {
+      const auditorProfile = await prisma.auditor.findUnique({ where: { userId: session.user.id } });
+      if (!auditorProfile || auditorProfile.firmId !== audit.firmId) {
+        return { error: "Forbidden: You do not have access to this audit." };
+      }
     }
+
+    return { success: true, audit };
+
+  } catch (error: unknown) {
+    console.error("Error fetching audit details:", error);
+    if (error instanceof Error) {
+      return { error: `Failed to fetch audit details: ${error.message}` };
+    }
+    return { error: "Failed to fetch audit details due to an unknown error." };
+  }
 }
 
 /**
@@ -1167,7 +1167,7 @@ export async function getAuditForAdminAction(auditId: string) {
     if (!audit) {
       return { error: "Audit not found" };
     }
-    
+
     return { success: true, data: audit, audit };
 
   } catch (error) {
@@ -1199,7 +1199,7 @@ export async function saveAuditScorecardAction(data: {
       where: { id: data.auditId },
       select: { auditorId: true, agencyId: true, agency: { select: { name: true } } }
     });
-    
+
     if (!audit) {
       return { error: "Audit not found" };
     }
@@ -1245,7 +1245,7 @@ export async function saveAuditScorecardAction(data: {
       `Your audit scorecard for the period ${data.auditPeriod} has been published.`,
       `/user/audits/${data.auditId}` // Link to the new agency view
     );
-    
+
     revalidatePath(`/admin/audits/${data.auditId}`);
     revalidatePath(`/user/audits/${data.auditId}`);
 
@@ -1301,8 +1301,8 @@ export async function getAuditDetailsForAdminAction(auditId: string) {
     if (!audit) {
       return { success: false, error: "Audit not found." };
     }
-    
-    return { success: true, data: audit };
+
+    return { success: true, data: JSON.parse(JSON.stringify(audit)) };
 
   } catch (error) {
     return { success: false, error: getErrorMessage(error) };

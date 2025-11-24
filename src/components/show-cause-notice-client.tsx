@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { 
-  ShowCauseNotice, 
-  Observation, 
-  Penalty, 
+import {
+  ShowCauseNotice,
+  Observation,
+  Penalty,
   ShowCauseResponse,
   ShowCauseStatus,
   ObservationStatus,
@@ -29,6 +29,9 @@ import { assignPenaltyAction } from "@/actions/audit-management.action"; // For 
 import { closeShowCauseNoticeAction } from "@/actions/show-cause-notice.action"; // For Admin
 import { Input } from "@/components/ui/input";
 import { uploadEvidenceAction } from "@/actions/upload-evidence.action"; // For Agency
+import { ObservationComments } from "@/components/observation-comments";
+import { MessageSquare } from "lucide-react";
+import { format } from "date-fns";
 
 // --- This is the complex type for the `notice` prop, including the fix ---
 type ObservationWithAuditDetails = Observation & {
@@ -39,6 +42,7 @@ type ObservationWithAuditDetails = Observation & {
       user: { name: string } | null;
     } | null;
   } | null;
+  _count: { comments: number };
 };
 
 type NoticeWithRelations = ShowCauseNotice & {
@@ -76,6 +80,7 @@ export function ShowCauseNoticeClient({ notice, isAgencyView }: ShowCauseNoticeC
   const [deductionMonth, setDeductionMonth] = useState("");
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [adminRemarks, setAdminRemarks] = useState(notice.adminRemarks || "");
+  const [discussionModalObs, setDiscussionModalObs] = useState<ObservationWithAuditDetails | null>(null);
 
   const getStatusBadge = (status: ShowCauseStatus) => {
     switch (status) {
@@ -105,7 +110,7 @@ export function ShowCauseNoticeClient({ notice, isAgencyView }: ShowCauseNoticeC
     setJustification("");
     setFile(null);
   };
-  
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
@@ -139,9 +144,9 @@ export function ShowCauseNoticeClient({ notice, isAgencyView }: ShowCauseNoticeC
       toast.info("Uploading evidence...");
       const formData = new FormData();
       formData.append("evidenceFile", file);
-      
+
       const uploadResult = await uploadEvidenceAction(formData);
-      
+
       setIsUploading(false);
       if (uploadResult.error) {
         toast.error(uploadResult.error);
@@ -188,7 +193,7 @@ export function ShowCauseNoticeClient({ notice, isAgencyView }: ShowCauseNoticeC
     }
     setIsPending(false);
   };
-  
+
   const handleCloseNotice = async () => {
     if (!adminRemarks.trim()) {
       toast.error("Please provide final closing remarks."); return;
@@ -216,8 +221,8 @@ export function ShowCauseNoticeClient({ notice, isAgencyView }: ShowCauseNoticeC
             <div>
               <CardTitle className="text-2xl">{notice.subject}</CardTitle>
               <CardDescription className="mt-2">
-                Issued by: {notice.issuedByAdmin?.name || "N/A"} | 
-                Due Date: {new Date(notice.responseDueDate).toLocaleDateString()}
+                Issued by: {notice.issuedByAdmin?.name || "N/A"} |
+                Due Date: {format(new Date(notice.responseDueDate), "dd/MM/yyyy")}
               </CardDescription>
             </div>
             {getStatusBadge(notice.status)}
@@ -268,12 +273,12 @@ export function ShowCauseNoticeClient({ notice, isAgencyView }: ShowCauseNoticeC
                           {obs.severity}
                         </Badge>
                       </TableCell>
-                      
+
                       {/* --- ADMIN VISIBILITY FIX - DISPLAYING INFO --- */}
                       <TableCell className="text-xs">
                         <p><strong>Firm:</strong> {obs.audit?.firm?.name || 'N/A'}</p>
                         <p><strong>Auditor:</strong> {obs.audit?.auditor?.user?.name || 'N/A'}</p>
-                        <p><strong>On:</strong> {new Date(obs.createdAt).toLocaleDateString()}</p>
+                        <p><strong>On:</strong> {format(new Date(obs.createdAt), "dd/MM/yyyy")}</p>
                       </TableCell>
                       {/* --- END FIX --- */}
 
@@ -303,6 +308,20 @@ export function ShowCauseNoticeClient({ notice, isAgencyView }: ShowCauseNoticeC
                         {!isAgencyView && obs.status === 'AGENCY_DISPUTED' && !obs.penaltyId && (
                           <AlertTriangle className="h-5 w-5 text-red-500 ml-auto" />
                         )}
+                        {/* Show Discussion Button for Disputed/Accepted Observations */}
+                        {(obs.status === 'AGENCY_DISPUTED' || obs.status === 'AGENCY_ACCEPTED') && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="ml-2"
+                            onClick={() => setDiscussionModalObs(obs)}
+                            title="View Discussion"
+                          >
+                            <MessageSquare className="h-4 w-4 mr-1" />
+                            Discuss
+                          </Button>
+                        )}
+
                       </TableCell>
                     </TableRow>
                   ))}
@@ -310,21 +329,21 @@ export function ShowCauseNoticeClient({ notice, isAgencyView }: ShowCauseNoticeC
               </Table>
             </div>
           </div>
-          
+
         </CardContent>
         {!isAgencyView && notice.status !== 'CLOSED' && (
           <CardFooter className="border-t pt-6">
             <div className="w-full space-y-4">
               <h4 className="font-semibold">Admin Actions</h4>
               <Label htmlFor="adminRemarks">Final Remarks</Label>
-              <Textarea 
-                id="adminRemarks" 
+              <Textarea
+                id="adminRemarks"
                 placeholder="Add closing remarks here..."
                 value={adminRemarks}
                 onChange={(e) => setAdminRemarks(e.target.value)}
               />
-              <Button 
-                onClick={handleCloseNotice} 
+              <Button
+                onClick={handleCloseNotice}
                 disabled={!allObservationsHandled || isPending}
                 title={allObservationsHandled ? "Close this notice" : "Cannot close: Observations are still pending agency response."}
               >
@@ -359,20 +378,20 @@ export function ShowCauseNoticeClient({ notice, isAgencyView }: ShowCauseNoticeC
                 <Label htmlFor="r-no" className="font-normal">No, I deny/dispute this observation.</Label>
               </div>
             </RadioGroup>
-            
+
             {isAccepted === false && (
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="justification">Justification (Required if denying)</Label>
-                  <Textarea 
-                    id="justification" 
+                  <Textarea
+                    id="justification"
                     rows={5}
                     value={justification}
                     onChange={(e) => setJustification(e.target.value)}
                     placeholder="Please provide a detailed explanation and any evidence references..."
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="evidenceFile">
                     Supporting Evidence (Max 5MB)
@@ -402,7 +421,7 @@ export function ShowCauseNoticeClient({ notice, isAgencyView }: ShowCauseNoticeC
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      
+
       {/* Admin: Assign Penalty Dialog */}
       <Dialog open={!!penaltyModalObs} onOpenChange={() => setPenaltyModalObs(null)}>
         <DialogContent>
@@ -451,6 +470,25 @@ export function ShowCauseNoticeClient({ notice, isAgencyView }: ShowCauseNoticeC
               {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm & Close"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Discussion Dialog */}
+      <Dialog open={!!discussionModalObs} onOpenChange={() => setDiscussionModalObs(null)}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Discussion: {discussionModalObs?.observationNumber}</DialogTitle>
+            <DialogDescription>
+              Conversation history for this observation.
+            </DialogDescription>
+          </DialogHeader>
+          {discussionModalObs && (
+            <ObservationComments
+              observationId={discussionModalObs.id}
+              currentUserRole={isAgencyView ? "USER" : "ADMIN"}
+              initialCommentCount={discussionModalObs._count.comments}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </>

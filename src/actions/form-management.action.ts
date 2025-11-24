@@ -21,6 +21,9 @@ type UserBasic = {
   id: string;
   name: string;
   email: string;
+  agencyProfile: {
+    vemId: string | null;
+  } | null;
 };
 
 // Define the function's return type
@@ -151,6 +154,11 @@ export async function getUsersWithSubmissionStats(
           id: true,
           name: true,
           email: true,
+          agencyProfile: { // Include the related agency profile
+            select: {
+              vemId: true, // And select only the vemId from it
+            },
+          },
         },
         skip: (data.page - 1) * data.pageSize,
         take: data.pageSize,

@@ -1,4 +1,3 @@
-//src/app/profile/page.tsx
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { SignOutButton } from "@/components/sign-out-button";
 import { Button } from "@/components/ui/button";
@@ -23,7 +22,8 @@ import { NotificationBell } from "@/components/notification-bell";
 import { EnhancedActivityLogs } from "@/components/enhanced-activity-logs";
 import { LayoutDashboard, UserCog, UserCheck, Search } from "lucide-react";
 import { CollectionManagerProfileForm } from "@/components/cm-profile-form";
-import { AgencyProfileForm } from "@/components/agency-profile-form"; // NEW IMPORT
+import { AgencyProfileForm } from "@/components/agency-profile-form";
+import { AuditingFirmProfile } from "@/components/auditing-firm-profile"; // <-- NEW IMPORT
 
 export default async function Page() {
   const headersList = await headers();
@@ -32,14 +32,12 @@ export default async function Page() {
   if (!session) redirect("/auth/login");
 
   if (session.user.banned) {
-    redirect("/auth/deactivated"); 
+    redirect("/auth/deactivated");
   }
 
   const role = session.user.role;
 
-  // Check if the user is an agency user (USER or COLLECTION_MANAGER)
   const isAgencyUser = role === UserRole.USER;
-
   const isAdminUser = role === UserRole.ADMIN;
   const isSuperAdmin = role === UserRole.SUPER_ADMIN;
   const isAuditor = role === UserRole.AUDITOR;
@@ -73,23 +71,41 @@ export default async function Page() {
     dashboardIcon = <LayoutDashboard className="mr-2 h-4 w-4" />;
   }
 
-  // Determine the default tab based on role
-  const defaultTab = isAgencyUser && role === UserRole.USER ? "agency" : "account";
-  // Determine grid columns for TabsList based on whether agency tab is present
-  const tabsListCols = isAgencyUser && role === UserRole.USER ? 'grid-cols-3' : 'grid-cols-2';
+  // === MODIFIED TAB LOGIC ===
+  // This is more robust and fixes the grid column bug
+  const hasAgencyTab = role === UserRole.USER;
+  const hasAdminTab =
+    isAdminUser || isSuperAdmin || isAuditor || isCollectionManager;
+
+  // Determine the correct default tab
+  const defaultTab = hasAgencyTab
+    ? "agency"
+    : hasAdminTab
+    ? "admin"
+    : "account";
+
+  // Determine grid columns based on whether an extra tab is present
+  const tabsListCols =
+    hasAgencyTab || hasAdminTab ? "grid-cols-3" : "grid-cols-2";
+  // === END MODIFIED TAB LOGIC ===
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Conditionally render PageHeader ONLY for Agency Users */}
       {isAgencyUser && (
-        <PageHeader returnHref="/user/dashboard" returnLabel="Back to Dashboard" />
+        <PageHeader
+          returnHref="/user/dashboard"
+          returnLabel="Back to Dashboard"
+        />
       )}
 
       <div className="px-6 py-12 container mx-auto max-w-6xl space-y-10">
         {/* --- PAGE HEADER --- */}
         <div className="flex justify-between items-center flex-wrap gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-neutral-800 dark:text-neutral-100">Profile</h1>
+            <h1 className="text-4xl font-bold text-neutral-800 dark:text-neutral-100">
+              Profile
+            </h1>
             <p className="text-muted-foreground text-sm mt-1 dark:text-gray-400">
               Manage your account details and view activity logs
             </p>
@@ -116,18 +132,20 @@ export default async function Page() {
 
         {/* --- TABS SECTION --- */}
         <Tabs defaultValue={defaultTab} className="space-y-8">
-          <TabsList className={`grid ${tabsListCols} w-full max-w-md mx-auto`}>
+          <TabsList
+            className={`grid ${tabsListCols} w-full max-w-md mx-auto`}
+          >
             {/* Agency Details Tab only for USER role */}
             {role === UserRole.USER && (
               <TabsTrigger value="agency">Agency Details</TabsTrigger>
             )}
             {/* Admin/Auditor/CM Details Tab */}
-            {(isAdminUser || isSuperAdmin || isAuditor || isCollectionManager) && (
+            {hasAdminTab && ( // <-- Use new variable
               <TabsTrigger value="admin">
                 {isSuperAdmin
                   ? "Super Admin Details"
                   : isAuditor
-                  ? "Auditor Details"
+                  ? "Auditing Firm" // <-- UPDATED LABEL
                   : isCollectionManager
                   ? "Collection Manager Details"
                   : "Admin Details"}
@@ -138,27 +156,27 @@ export default async function Page() {
           </TabsList>
 
           {/* === TAB: ADMIN / SUPER_ADMIN / AUDITOR / COLLECTION_MANAGER === */}
-          {(isAdminUser || isSuperAdmin || isAuditor || isCollectionManager) && (
+          {hasAdminTab && ( // <-- Use new variable
             <TabsContent value="admin" className="space-y-10">
+              {/* === MODIFIED LOGIC HERE === */}
               {isCollectionManager ? (
                 // For Collection Managers, show the dynamic form
                 <CollectionManagerProfileForm />
+              ) : isAuditor ? (
+                // For Auditors, show the new firm profile component
+                <AuditingFirmProfile />
               ) : (
-                // For Admins, Super Admins, and Auditors, show the static card
+                // For Admins and Super Admins, show the static card
                 <section className="space-y-8">
                   <div className="pb-4 border-b dark:border-gray-700">
                     <h2 className="text-3xl font-bold text-neutral-800 dark:text-neutral-100">
                       {isSuperAdmin
                         ? "Super Admin Information"
-                        : isAuditor
-                        ? "Auditor Information"
                         : "Admin Information"}
                     </h2>
                     <p className="text-muted-foreground text-sm mt-1 dark:text-gray-400">
                       {isSuperAdmin
                         ? "Overview of your system-level credentials and privileges."
-                        : isAuditor
-                        ? "Overview of your audit credentials and assigned reports."
                         : "Overview of your admin credentials and reporting structure."}
                     </p>
                   </div>
@@ -167,19 +185,29 @@ export default async function Page() {
                       <CardTitle className="dark:text-gray-100">
                         {isSuperAdmin
                           ? "Super Admin Details"
-                          : isAuditor
-                          ? "Auditor Details"
                           : "Admin Employee Details"}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-6">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                          <Label htmlFor="empId" className="dark:text-gray-300">Employee ID</Label>
-                          <Input id="empId" placeholder="N/A" readOnly className="dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"/>
+                          <Label
+                            htmlFor="empId"
+                            className="dark:text-gray-300"
+                          >
+                            Employee ID
+                          </Label>
+                          <Input
+                            id="empId"
+                            placeholder="N/A"
+                            readOnly
+                            className="dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"
+                          />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="name" className="dark:text-gray-300">Full Name</Label>
+                          <Label htmlFor="name" className="dark:text-gray-300">
+                            Full Name
+                          </Label>
                           <Input
                             id="name"
                             value={session.user.name ?? ""}
@@ -188,7 +216,12 @@ export default async function Page() {
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="email" className="dark:text-gray-300">Official Email</Label>
+                          <Label
+                            htmlFor="email"
+                            className="dark:text-gray-300"
+                          >
+                            Official Email
+                          </Label>
                           <Input
                             id="email"
                             value={session.user.email ?? ""}
@@ -197,14 +230,22 @@ export default async function Page() {
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="role" className="dark:text-gray-300">Role</Label>
-                          <Input id="role" value={role} readOnly className="dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"/>
+                          <Label htmlFor="role" className="dark:text-gray-300">
+                            Role
+                          </Label>
+                          <Input
+                            id="role"
+                            value={role}
+                            readOnly
+                            className="dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"
+                          />
                         </div>
                       </div>
                     </CardContent>
                   </Card>
                 </section>
               )}
+              {/* === END MODIFIED LOGIC === */}
             </TabsContent>
           )}
 
@@ -217,11 +258,11 @@ export default async function Page() {
                     Agency Information
                   </h2>
                   <p className="text-muted-foreground text-sm mt-1 dark:text-gray-400">
-                    Manage your agency&apos;s official details, key personnel, and branches.
+                    Manage your agency&apos;s official details, key personnel,
+                    and branches.
                   </p>
                 </div>
 
-                {/* NEW: Replace the static form with the dynamic component */}
                 <AgencyProfileForm />
               </section>
             </TabsContent>
@@ -231,7 +272,9 @@ export default async function Page() {
           <TabsContent value="account" className="space-y-10">
             <Card className="bg-white dark:bg-gray-800">
               <CardHeader>
-                <CardTitle className="dark:text-gray-100">Update Profile</CardTitle>
+                <CardTitle className="dark:text-gray-100">
+                  Update Profile
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <UpdateUserForm
@@ -243,7 +286,9 @@ export default async function Page() {
 
             <Card className="bg-white dark:bg-gray-800">
               <CardHeader>
-                <CardTitle className="dark:text-gray-100">Change Password</CardTitle>
+                <CardTitle className="dark:text-gray-100">
+                  Change Password
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <ChangePasswordForm />
