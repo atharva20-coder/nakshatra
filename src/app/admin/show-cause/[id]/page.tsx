@@ -28,6 +28,7 @@ type ObservationWithAuditDetails = Observation & {
       user: { name: string } | null;
     }) | null;
   }) | null;
+  _count: { comments: number };
 };
 
 type NoticeWithRelations = ShowCauseNotice & {
