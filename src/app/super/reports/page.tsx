@@ -72,7 +72,8 @@ export default async function AssignmentReportsPage({ searchParams }: PageProps)
               initialAuditReport={audits || []}
               initialPenalties={penalties || []}
               initialMonth={month}
-              initialYear={year} initialPenalties={[]}            />
+              initialYear={year}
+            />
           </CardContent>
         </Card>
       </div>
